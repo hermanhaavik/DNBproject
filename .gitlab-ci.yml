@@ -5,9 +5,40 @@
 # Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
 # Note that environment variables can be set in several places
 # See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
-stages:
-- test
-sast:
-  stage: test
 include:
-- template: Security/SAST.gitlab-ci.yml
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+stages:
+  - CI
+  - CD
+  - test
+
+secret_detection:
+  stage: CI
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_COMMIT_BRANCH == 'main'
+
+nodejs-scan-sast: 
+  stage: CI
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_COMMIT_BRANCH == 'main'
+
+semgrep-sast:
+  stage: CI
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_COMMIT_BRANCH == 'main'     
+
+
+validate-app: 
+  stage: CI
+  image: python:latest
+  script:
+    - apt update -y
+    - apt install nodejs -y 
+    - apt install npm -y
+    - curl -fsSL https://aka.ms/install-azd.sh | bash
+    - azd package -e test --no-prompt
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_COMMIT_BRANCH == 'main'
+
