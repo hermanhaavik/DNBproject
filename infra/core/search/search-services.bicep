@@ -28,9 +28,9 @@ resource search 'Microsoft.Search/searchServices@2021-04-01-preview' = {
       bypass: 'None'
       ipRules: []
     }
-    partitionCount: 1
+    partitionCount: 2
     publicNetworkAccess: 'Enabled'
-    replicaCount: 1
+    replicaCount: 2
     semanticSearch: semanticSearch
   }
   sku: sku
