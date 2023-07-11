@@ -135,7 +135,7 @@ const Chat = () => {
                     {!lastQuestionRef.current ? (
                         <div className={styles.chatEmptyState}>
                             <div>
-                                <Logo style={{ width: "230px", height: "auto", padding: "50px" }} />
+                                <Logo style={{ width: "170px", height: "auto", padding: "20px" }} />
                             </div>
                             {/* <SparkleFilled fontSize={"120px"} primaryFill={"rgba(115, 18, 225, 1)"} aria-hidden="true" aria-label="Chat logo" /> */}
                             <h1 className={styles.chatEmptyStateTitle}>Chat with Floyd</h1>
