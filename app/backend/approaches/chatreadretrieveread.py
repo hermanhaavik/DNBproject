@@ -5,6 +5,7 @@ from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from approaches.approach import Approach
 from text import nonewlines
+import time
 
 class ChatReadRetrieveReadApproach(Approach):
     """
@@ -54,11 +55,17 @@ Search query:
         self.content_field = content_field
 
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
+        print("Starting answering process")
+        start_time = time.time()
+
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 3
         exclude_category = overrides.get("exclude_category") or None
         filter = "category ne '{}'".format(exclude_category.replace("'", "''")) if exclude_category else None
     
+        step_time = time.time()
+        print("Beginning step 1: Generate keyword search query")
+
         # STEP 1: Generate an optimized keyword search query based on the chat history and the last question
         prompt = self.query_prompt_template.format(chat_history=self.get_chat_history_as_text(history, include_last_turn=False), question=history[-1]["user"])
         completion = openai.Completion.create(
@@ -67,8 +74,18 @@ Search query:
             temperature=0.0, 
             max_tokens=32, 
             n=1, 
-            stop=["\n"])
-        q = completion.choices[0].text
+            stop=["\n"],
+            stream=True)
+
+        q = ''
+        for chunk in completion:
+            print(chunk.choices[0].text)
+            q += chunk.choices[0].text
+
+        print(f"Finished step 1 in {time.time() - step_time} seconds")
+
+        print("Beginning step 2: Retrieve document from search index")
+        step_time = time.time()
 
         # STEP 2: Retrieve relevant documents from the search index with the GPT optimized query
         if overrides.get("semantic_ranker"):
@@ -88,6 +105,11 @@ Search query:
             results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r]
         content = "\n".join(results)
 
+        print(f"Finished step 2 in {time.time() - step_time} seconds")
+
+        print("Beginning step 3: Generate question answer")
+        step_time = time.time()
+
         follow_up_questions_prompt = self.follow_up_questions_prompt_content if overrides.get("suggest_followup_questions") else ""
         
         # Allow client to replace the entire prompt, or to inject into the exiting prompt using >>>
@@ -106,9 +128,19 @@ Search query:
             temperature=overrides.get("temperature") or 0.7, 
             max_tokens=1024, 
             n=1, 
-            stop=["<|im_end|>", "<|im_start|>"])
+            stop=["<|im_end|>", "<|im_start|>"],
+            stream=True)
 
-        return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+        answer = ''
+        for chunk in completion:
+            print(answer.choices[0].text)
+            answer += chunk.choices[0].text
+
+        print(f"Finished step 3 in {time.time() - step_time} seconds")
+
+        print(f"Answering process completed in {time.time() - start_time}  seconds")
+
+        return {"data_points": results, "answer": answer, "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
     
     def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
         history_text = ""
