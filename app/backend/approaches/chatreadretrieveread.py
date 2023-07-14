@@ -1,3 +1,4 @@
+import re
 from typing import Any, Sequence
 
 import openai
@@ -54,6 +55,11 @@ Search query:
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
 
+    def __source_url_from_doc(self, doc: dict[str, str]):
+        sourcepage = doc[self.sourcepage_field]
+        without_suffix = re.sub(r'-(\d+)\.pdf$', '.pdf', sourcepage)
+        return without_suffix.replace('__', '/')
+
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         print("Starting answering process")
         start_time = time.time()
@@ -99,10 +105,11 @@ Search query:
                                           query_caption="extractive|highlight-false" if use_semantic_captions else None)
         else:
             r = self.search_client.search(q, filter=filter, top=top)
+
         if use_semantic_captions:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
+            results = [self.__source_url_from_doc(doc) + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
         else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r]
+            results = [self.__source_url_from_doc(doc) + ": " + nonewlines(doc[self.content_field]) for doc in r]
         content = "\n".join(results)
 
         print(f"Finished step 2 in {time.time() - step_time} seconds")
