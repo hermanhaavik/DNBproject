@@ -31,7 +31,7 @@ class ReadRetrieveReadApproach(Approach):
 "It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
 "If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
 "Never quote tool names as sources." \
-"If you cannot answer using the sources below, say that you don't know, and that the user should contact customer support. " \
+"If you cannot answer the question using the sources below, say that you don't know, and that the user should contact customer support. " \
 "If you need more information, ask the user for it. " \
 "\n\nYou can access to the following tools:"
     
@@ -39,10 +39,21 @@ class ReadRetrieveReadApproach(Approach):
 Begin!
 
 Question: {input}
+Thought: {agent_scratchpad}"""  
 
-Thought: {agent_scratchpad}"""    
+    format_instructions = """
+Use the following format:
 
-    CognitiveSearchToolDescription = "Useful for searhcing the DNB insurance information such as car insurance, home insurance, etc."
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question"""
+
+    CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance car insurance, etc."
 
     def __init__(self, search_client: SearchClient, openai_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
@@ -97,7 +108,7 @@ Thought: {agent_scratchpad}"""
             suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
             input_variables = ["input", "agent_scratchpad"])
         print(prompt)
-        llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0.3, openai_api_key=openai.api_key)
+        llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key)
         chain = LLMChain(llm = llm, prompt = prompt)
         agent_exec = AgentExecutor.from_agent_and_tools(
             agent = ZeroShotAgent(llm_chain = chain, tools = tools),
