@@ -140,7 +140,7 @@ Search query:
 
         answer = ''
         for chunk in completion:
-            print(answer.choices[0].text)
+            print(chunk.choices[0].text)
             answer += chunk.choices[0].text
 
         print(f"Finished step 3 in {time.time() - step_time} seconds")
