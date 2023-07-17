@@ -8,7 +8,6 @@ from langchain.chains import LLMChain
 from langchain.agents import Tool, ZeroShotAgent, AgentExecutor
 from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
-from lookuptool import CsvLookupTool
 from typing import Any
 
 class ReadRetrieveReadApproach(Approach):
@@ -24,7 +23,7 @@ class ReadRetrieveReadApproach(Approach):
     """
 
     template_prefix = \
-"You are an intelligent assistant called Floyd, and your job is helping DNB Bank ASA customers with their questions about insurance." \
+"You are an intelligent assistant. Your name is Floyd.  Your job is helping DNB Bank ASA customers with their questions about insurance." \
 "For tabular information return it as an html table. Do not return markdown format. " \
 "Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
 "For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
@@ -97,8 +96,7 @@ Final Answer: the final answer to the original input question"""
                         func=lambda q: self.retrieve(q, overrides), 
                         description=self.CognitiveSearchToolDescription,
                         callbacks=cb_manager)
-        # employee_tool = EmployeeInfoTool("Employee1", callbacks=cb_manager)
-        # tools = [acs_tool, employee_tool]
+       
         tools = [acs_tool]
         print(acs_tool, acs_tool.name, acs_tool.description)
 
@@ -118,24 +116,6 @@ Final Answer: the final answer to the original input question"""
         result = agent_exec.run(q)
                 
         # Remove references to tool names that might be confused with a citation
-        # result = result.replace("[CognitiveSearch]", "").replace("[Employee]", "")
         result = result.replace("[CognitiveSearch]", "")
 
-        print(result)
-
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
-
-# class EmployeeInfoTool(CsvLookupTool):
-#     employee_name: str = ""
-
-#     def __init__(self, employee_name: str, callbacks: Callbacks = None):
-#         super().__init__(filename="data/employeeinfo.csv", 
-#                          key_field="name", 
-#                          name="Employee", 
-#                          description="useful for answering questions about the employee, their benefits and other personal information",
-#                          callbacks=callbacks)
-#         self.func = self.employee_info
-#         self.employee_name = employee_name
-
-#     def employee_info(self, name: str) -> str:
-#         return self.lookup(name)
