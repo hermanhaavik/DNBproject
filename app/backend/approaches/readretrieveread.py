@@ -24,7 +24,7 @@ class ReadRetrieveReadApproach(Approach):
     """
 
     template_prefix = \
-"You are an intelligent assistant helping DNB Bank AS customers with their questions about insurance." \
+"You are an intelligent assistant called Floyd, and your job is helping DNB Bank ASA customers with their questions about insurance." \
 "For tabular information return it as an html table. Do not return markdown format. " \
 "Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
 "For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
@@ -32,6 +32,7 @@ class ReadRetrieveReadApproach(Approach):
 "If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
 "Never quote tool names as sources." \
 "If you cannot answer using the sources below, say that you don't know, and that the user should contact customer support. " \
+"If you need more information, ask the user for it. " \
 "\n\nYou can access to the following tools:"
     
     template_suffix = """
@@ -41,7 +42,7 @@ Question: {input}
 
 Thought: {agent_scratchpad}"""    
 
-    CognitiveSearchToolDescription = "useful for searching the Microsoft employee benefits information such as healthcare plans, retirement plans, etc."
+    CognitiveSearchToolDescription = "Useful for searhcing the DNB insurance information such as car insurance, home insurance, etc."
 
     def __init__(self, search_client: SearchClient, openai_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
@@ -85,14 +86,17 @@ Thought: {agent_scratchpad}"""
                         func=lambda q: self.retrieve(q, overrides), 
                         description=self.CognitiveSearchToolDescription,
                         callbacks=cb_manager)
-        employee_tool = EmployeeInfoTool("Employee1", callbacks=cb_manager)
-        tools = [acs_tool, employee_tool]
+        # employee_tool = EmployeeInfoTool("Employee1", callbacks=cb_manager)
+        # tools = [acs_tool, employee_tool]
+        tools = [acs_tool]
+        print(acs_tool, acs_tool.name, acs_tool.description)
 
         prompt = ZeroShotAgent.create_prompt(
             tools=tools,
             prefix=overrides.get("prompt_template_prefix") or self.template_prefix,
             suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
             input_variables = ["input", "agent_scratchpad"])
+        print(prompt)
         llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0.3, openai_api_key=openai.api_key)
         chain = LLMChain(llm = llm, prompt = prompt)
         agent_exec = AgentExecutor.from_agent_and_tools(
@@ -103,21 +107,24 @@ Thought: {agent_scratchpad}"""
         result = agent_exec.run(q)
                 
         # Remove references to tool names that might be confused with a citation
-        result = result.replace("[CognitiveSearch]", "").replace("[Employee]", "")
+        # result = result.replace("[CognitiveSearch]", "").replace("[Employee]", "")
+        result = result.replace("[CognitiveSearch]", "")
+
+        print(result)
 
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
 
-class EmployeeInfoTool(CsvLookupTool):
-    employee_name: str = ""
+# class EmployeeInfoTool(CsvLookupTool):
+#     employee_name: str = ""
 
-    def __init__(self, employee_name: str, callbacks: Callbacks = None):
-        super().__init__(filename="data/employeeinfo.csv", 
-                         key_field="name", 
-                         name="Employee", 
-                         description="useful for answering questions about the employee, their benefits and other personal information",
-                         callbacks=callbacks)
-        self.func = self.employee_info
-        self.employee_name = employee_name
+#     def __init__(self, employee_name: str, callbacks: Callbacks = None):
+#         super().__init__(filename="data/employeeinfo.csv", 
+#                          key_field="name", 
+#                          name="Employee", 
+#                          description="useful for answering questions about the employee, their benefits and other personal information",
+#                          callbacks=callbacks)
+#         self.func = self.employee_info
+#         self.employee_name = employee_name
 
-    def employee_info(self, name: str) -> str:
-        return self.lookup(name)
+#     def employee_info(self, name: str) -> str:
+#         return self.lookup(name)
