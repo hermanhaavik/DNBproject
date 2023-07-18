@@ -99,3 +99,4 @@ Answer:
             return {"data_points": results, "answer": "Request took to long... Please try again", "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
 
         return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+    
