@@ -82,15 +82,14 @@ Answer:
         #Setting the starttime for the counter
         start_time = time.time()
         completion = openai.Completion.create(
-            engine=self.openai_deployment, 
-            #Testing to see what streaming can do to help idel time, or at least make it seem quicker.
-            #Another solution is threading, but not sure how well that will work in our case
-            stream=True
-            prompt=prompt, 
-            temperature=overrides.get("temperature") or 0.3, 
-            max_tokens=1024, 
-            n=1, 
-            stop=["\n"])
+            engine=self.openai_deployment,
+            stream=True,
+            prompt=prompt,
+            temperature=overrides.get("temperature") or 0.3,
+            max_tokens=1024,
+            n=1,
+            stop=["\n"]
+)
         
         #Finding how long has elapsed since start of request
         elapsed_time = time.time()- start_time
