@@ -4,6 +4,7 @@ from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from text import nonewlines
 from typing import Any
+import time
 
 
 class RetrieveThenReadApproach(Approach):
@@ -75,12 +76,26 @@ Answer:
         content = "\n".join(results)
 
         prompt = (overrides.get("prompt_template") or self.template).format(q=q, retrieved=content)
+
+       
+       
+        #Setting the starttime for the counter
+        start_time = time.time()
         completion = openai.Completion.create(
             engine=self.openai_deployment, 
+            #Testing to see what streaming can do to help idel time, or at least make it seem quicker.
+            #Another solution is threading, but not sure how well that will work in our case
+            stream=True
             prompt=prompt, 
             temperature=overrides.get("temperature") or 0.3, 
             max_tokens=1024, 
             n=1, 
             stop=["\n"])
+        
+        #Finding how long has elapsed since start of request
+        elapsed_time = time.time()- start_time
+
+        if (elapsed_time >= 10):
+            return {"data_points": results, "answer": "Request took to long... Please try again", "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
 
         return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
