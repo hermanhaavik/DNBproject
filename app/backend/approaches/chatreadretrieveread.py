@@ -1,35 +1,61 @@
-from typing import Any, Sequence
-
 import openai
+from approaches.approach import Approach
 from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
-from approaches.approach import Approach
+from langchain.llms.openai import AzureOpenAI
+from langchain.callbacks.manager import CallbackManager, Callbacks
+from langchain.chains import LLMChain
+from langchain.agents import Tool, ZeroShotAgent, AgentExecutor
+from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
+from typing import Any, Sequence
 
 class ChatReadRetrieveReadApproach(Approach):
     """
-    Simple retrieve-then-read implementation, using the Cognitive Search and OpenAI APIs directly. It first retrieves
-    top documents from search, then constructs a prompt with them, and then uses OpenAI to generate an completion
-    (answer) with that prompt.
+    Attempt to answer questions by iteratively evaluating the question to see what information is missing, and once all information
+    is present then formulate an answer. Each iteration consists of two parts:
+     1. use GPT to see if we need more information
+     2. if more data is needed, use the requested "tool" to retrieve it.
+    The last call to GPT answers the actual question.
+    This is inspired by the MKRL paper[1] and applied here using the implementation in Langchain.
+
+    [1] E. Karpas, et al. arXiv:2205.00445
     """
+    
+  
 
-    prompt_prefix = """<|im_start|>system
-Assistant helps the customers of DNB bank with their questions about insurance. Be brief in your answers. Only answer questions about DNB insurance. If you get questions about other insurance providers, tell a joke about insurance. 
-Answer ONLY with the facts listed in the list of sources below. If there isn't enough information below, say you don't know. Do not generate answers that don't use the sources below. If asking a clarifying question to the user would help, ask the question.
-For tabular information return it as an html table. Do not return markdown format.
-Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
-{follow_up_questions_prompt}
-{injected_prompt}
-Sources:
-{sources}
-<|im_end|>
-{chat_history}
-"""
+    template_prefix = \
+"You are an intelligent assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
+"For information in table format return it as an html table. Do not return markdown format. " \
+"Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
+"For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
+"It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
+"If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
+"Never quote tool names as sources." \
+"If the question is incomplete, ask the user for more information. " \
+"If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
+"\n\nYou can access the following tools: "
 
-    follow_up_questions_prompt_content = """Generate three very brief follow-up questions that the user would likely ask next about their insurance. 
-    Use double angle brackets to reference the questions, e.g. <<Are there exclusions for prescriptions?>>.
-    Try not to repeat questions that have already been asked.
-    Only generate questions and do not generate any text before or after the questions, such as 'Next Questions'"""
+    template_suffix = """
+Begin!
+
+Why do I get an error message here?
+
+
+Question: {input}
+Thought: {agent_scratchpad}"""  
+
+    format_instructions = """
+Use the following format:
+
+Question: the input question you must answer.
+Thought: you should always think about what to do to find the answer. 
+Action: the action to take to find the answer, should be one of [{tool_names}].
+Action Input: the input to the action.
+Observation: the result of the action.
+... (this Thought/Action/Action Input/Observation can repeat N times).
+Thought: I now know the final answer.
+Final Answer: Based on my observations, I now know the final answer to the original input question."""
 
     query_prompt_template = """Below is a history of the conversation so far, and a new question asked by the user that needs to be answered by searching in a knowledge base about insurance.
     Generate a search query based on the conversation and the new question. 
@@ -43,73 +69,75 @@ Chat History:
 Question:
 {question}
 
-Search query:
+Search Query:
 """
+    CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance car insurance, etc."
 
-    def __init__(self, search_client: SearchClient, chatgpt_deployment: str, gpt_deployment: str, sourcepage_field: str, content_field: str):
+    def __init__(self, search_client: SearchClient, openai_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
-        self.chatgpt_deployment = chatgpt_deployment
-        self.gpt_deployment = gpt_deployment
+        self.openai_deployment = openai_deployment
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
 
-    def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
+    def retrieve(self, q: str, overrides: dict[str, Any]) -> Any:
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 3
         exclude_category = overrides.get("exclude_category") or None
         filter = "category ne '{}'".format(exclude_category.replace("'", "''")) if exclude_category else None
-    
-        # STEP 1: Generate an optimized keyword search query based on the chat history and the last question
-        prompt = self.query_prompt_template.format(chat_history=self.get_chat_history_as_text(history, include_last_turn=False), question=history[-1]["user"])
-        completion = openai.Completion.create(
-            engine=self.gpt_deployment, 
-            prompt=prompt, 
-            temperature=0.0, 
-            max_tokens=32, 
-            n=1, 
-            stop=["\n"])
-        q = completion.choices[0].text
 
-        # STEP 2: Retrieve relevant documents from the search index with the GPT optimized query
         if overrides.get("semantic_ranker"):
-            r = self.search_client.search(q, 
-                                          filter=filter,
+            r = self.search_client.search(q,
+                                          filter=filter, 
                                           query_type=QueryType.SEMANTIC, 
                                           query_language="en-us", 
                                           query_speller="lexicon", 
                                           semantic_configuration_name="default", 
-                                          top=top, 
+                                          top = top,
                                           query_caption="extractive|highlight-false" if use_semantic_captions else None)
         else:
             r = self.search_client.search(q, filter=filter, top=top)
         if use_semantic_captions:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
+            self.results = [doc[self.sourcepage_field] + ":" + nonewlines(" -.- ".join([c.text for c in doc['@search.captions']])) for doc in r]
         else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r]
-        content = "\n".join(results)
-
-        follow_up_questions_prompt = self.follow_up_questions_prompt_content if overrides.get("suggest_followup_questions") else ""
+            self.results = [doc[self.sourcepage_field] + ":" + nonewlines(doc[self.content_field][:250]) for doc in r]
+        content = "\n".join(self.results)
+        return content
         
-        # Allow client to replace the entire prompt, or to inject into the exiting prompt using >>>
-        prompt_override = overrides.get("prompt_template")
-        if prompt_override is None:
-            prompt = self.prompt_prefix.format(injected_prompt="", sources=content, chat_history=self.get_chat_history_as_text(history), follow_up_questions_prompt=follow_up_questions_prompt)
-        elif prompt_override.startswith(">>>"):
-            prompt = self.prompt_prefix.format(injected_prompt=prompt_override[3:] + "\n", sources=content, chat_history=self.get_chat_history_as_text(history), follow_up_questions_prompt=follow_up_questions_prompt)
-        else:
-            prompt = prompt_override.format(sources=content, chat_history=self.get_chat_history_as_text(history), follow_up_questions_prompt=follow_up_questions_prompt)
+    def run(self, q: str, overrides: dict[str, Any]) -> Any:
+        # Not great to keep this as instance state, won't work with interleaving (e.g. if using async), but keeps the example simple
+        self.results = None
 
-        # STEP 3: Generate a contextual and content specific answer using the search results and chat history
-        completion = openai.Completion.create(
-            engine=self.chatgpt_deployment, 
-            prompt=prompt, 
-            temperature=overrides.get("temperature") or 0.7, 
-            max_tokens=1024, 
-            n=1, 
-            stop=["<|im_end|>", "<|im_start|>"])
+        # Use to capture thought process during iterations
+        cb_handler = HtmlCallbackHandler()
+        cb_manager = CallbackManager(handlers=[cb_handler])
+        
+        acs_tool = Tool(name="CognitiveSearch", 
+                        func=lambda q: self.retrieve(q, overrides), 
+                        description=self.CognitiveSearchToolDescription,
+                        callbacks=cb_manager)
+       
+        tools = [acs_tool]
 
-        return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
-    
+        prompt = ZeroShotAgent.create_prompt(
+            tools=tools,
+            prefix=overrides.get("prompt_template_prefix") or self.template_prefix,
+            suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
+            input_variables = ["input", "agent_scratchpad"])
+        print(prompt)
+        llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key)
+        chain = LLMChain(llm = llm, prompt = prompt)
+        agent_exec = AgentExecutor.from_agent_and_tools(
+            agent = ZeroShotAgent(llm_chain = chain, tools = tools),
+            tools = tools, 
+            verbose = True, 
+            callback_manager = cb_manager)
+        result = agent_exec.run(q)
+                
+        # Remove references to tool names that might be confused with a citation
+        result = result.replace("[CognitiveSearch]", "")
+
+        return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
+
     def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
         history_text = ""
         for h in reversed(history if include_last_turn else history[:-1]):

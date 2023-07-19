@@ -24,16 +24,16 @@ class ReadRetrieveReadApproach(Approach):
 
     template_prefix = \
 "You are an intelligent assistant. Your name is Floyd.  Your job is helping DNB Bank ASA customers with their questions about insurance." \
-"For tabular information return it as an html table. Do not return markdown format. " \
+"For information in table format return it as an html table. Do not return markdown format. " \
 "Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
 "For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
 "It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
 "If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
 "Never quote tool names as sources." \
-"If you cannot answer the question using the sources below, say that you don't know, and that the user should contact customer support. " \
-"If you need more information, ask the user for it. " \
+"If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
 "\n\nYou can access to the following tools:"
-    
+# "If you need more information, ask the user for it. " \    
+
     template_suffix = """
 Begin!
 
@@ -43,14 +43,14 @@ Thought: {agent_scratchpad}"""
     format_instructions = """
 Use the following format:
 
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question"""
+Question: the input question you must answer.
+Thought: you should always think about what to do to find the answer. 
+Action: the action to take to find the answer, should be one of [{tool_names}].
+Action Input: the input to the action.
+Observation: the result of the action.
+... (this Thought/Action/Action Input/Observation can repeat N times).
+Thought: I now know the final answer.
+Final Answer: Based on my observations, I now know the final answer to the original input question."""
 
     CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance car insurance, etc."
 
@@ -98,7 +98,6 @@ Final Answer: the final answer to the original input question"""
                         callbacks=cb_manager)
        
         tools = [acs_tool]
-        print(acs_tool, acs_tool.name, acs_tool.description)
 
         prompt = ZeroShotAgent.create_prompt(
             tools=tools,
