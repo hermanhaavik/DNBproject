@@ -4,7 +4,7 @@ from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from text import nonewlines
 from typing import Any
-import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 
 class RetrieveThenReadApproach(Approach):
@@ -77,8 +77,31 @@ Answer:
 
         prompt = (overrides.get("prompt_template") or self.template).format(q=q, retrieved=content)
 
+        
+        max_time_limit = 6
+
+        try:
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(openai.Completion.create(
+                    engine=self.openai_deployment,
+                
+                    prompt=prompt,
+                    temperature=overrides.get("temperature") or 0.3,
+                    max_tokens=1024,
+                    n=1,
+                    stop=["\n"]
+            ))
+                completion = future.result(timeout=max_time_limit)
+        
+        except TimeoutError:
+            return {"data_points": results, "answer": "Request took too long to generate, pleasre try again:=)", "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+        
+
+        return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+
+
        
-       
+    """
         #Setting the starttime for the counter
         start_time = time.time()
         completion = openai.Completion.create(
@@ -99,3 +122,5 @@ Answer:
 
         return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
     
+
+    """
