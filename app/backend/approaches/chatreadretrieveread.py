@@ -31,7 +31,7 @@ class ChatReadRetrieveReadApproach(Approach):
 "For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
 "It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
 "If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
-"Never quote tool names as sources." \
+"Never quote tool names or chat history as sources." \
 "If the question is incomplete, ask the user for more information. " \
 "If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
 "\n\nYou can access the following tools: "
@@ -99,9 +99,12 @@ Search Query:
         if use_semantic_captions:
             self.results = [doc[self.sourcepage_field] + ":" + nonewlines(" -.- ".join([c.text for c in doc['@search.captions']])) for doc in r]
         else:
-            self.results = [doc[self.sourcepage_field] + ":" + nonewlines(doc[self.content_field][:250]) for doc in r]
+             self.results = [doc[self.sourcepage_field] + ":" + nonewlines(doc[self.content_field][:250]) for doc in r]
         content = "\n".join(self.results)
         return content
+    
+    def askUser(self, q: str) -> Any:
+        return q
         
     def run(self, q: str, overrides: dict[str, Any]) -> Any:
         # Not great to keep this as instance state, won't work with interleaving (e.g. if using async), but keeps the example simple
@@ -115,8 +118,11 @@ Search Query:
                         func=lambda q: self.retrieve(q, overrides), 
                         description=self.CognitiveSearchToolDescription,
                         callbacks=cb_manager)
-       
-        tools = [acs_tool]
+        ask_user_tool = Tool(name="AskUser",
+                        func=lambda q: self.askUser(q),
+                        description="Useful for asking the user for more information if the question is incomplete.",
+                        callbacks=cb_manager)
+        tools = [acs_tool, ask_user_tool]
 
         prompt = ZeroShotAgent.create_prompt(
             tools=tools,

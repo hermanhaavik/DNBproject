@@ -117,3 +117,4 @@ Search query:
             if len(history_text) > approx_max_tokens*4:
                 break    
         return history_text
+

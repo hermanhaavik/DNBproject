@@ -84,7 +84,10 @@ Final Answer: Based on my observations, I now know the final answer to the origi
         content = "\n".join(self.results)
         return content
         
-    def run(self, q: str, overrides: dict[str, Any]) -> Any:
+    def run(self, q: str, overrides: dict[str, Any], ask_user: str) -> Any:
+        
+        if bool(ask_user):
+            return ask_user
         # Not great to keep this as instance state, won't work with interleaving (e.g. if using async), but keeps the example simple
         self.results = None
 
