@@ -52,6 +52,8 @@ Answer:
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
 
+
+
     def run(self, q: str, overrides: dict[str, Any]) -> Any:
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 3
@@ -82,15 +84,7 @@ Answer:
 
         try:
             with ThreadPoolExecutor() as executor:
-                future = executor.submit(openai.Completion.create(
-                    engine=self.openai_deployment,
-                
-                    prompt=prompt,
-                    temperature=overrides.get("temperature") or 0.3,
-                    max_tokens=1024,
-                    n=1,
-                    stop=["\n"]
-            ))
+                future = executor.submit(self.get_completion, prompt, overrides)
                 completion = future.result(timeout=max_time_limit)
         
         except TimeoutError:
@@ -100,6 +94,17 @@ Answer:
         return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
 
 
+
+    def get_completion(self, prompt, overrides):
+        return openai.Completion.create(
+            engine = self.openai_deployment,
+            prompt = prompt,
+            temperature = overrides.get("temperature") or 0.3,
+            max_tokens = 1024,
+            n = 1,
+            stop = ["\n"]
+
+        )
        
     """
         #Setting the starttime for the counter
