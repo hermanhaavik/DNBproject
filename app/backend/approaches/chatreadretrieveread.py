@@ -120,7 +120,7 @@ New input:
     def askUser(self, q: str) -> Any:
         return q
         
-    def run(self, q: str, overrides: dict[str, Any]) -> Any:
+    def run(self, history: Sequence[dict[str, str]], q: str, overrides: dict[str, Any]) -> Any:
         # Not great to keep this as instance state, won't work with interleaving (e.g. if using async), but keeps the example simple
         self.results = None
 
@@ -145,7 +145,7 @@ New input:
             human_prefix=self.human_prefix,
             format_instructions=self.format_instructions,
             input_variables=["input", "agent_scratchpad"],
-            memory=self.memory)
+            memory=self.get_chat_history_as_text(history, include_last_turn=False), question=history[-1]["user"])
         
         print(prompt)
         llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key)
@@ -165,10 +165,10 @@ New input:
 
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
 
-    # def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
-    #     history_text = ""
-    #     for h in reversed(history if include_last_turn else history[:-1]):
-    #         history_text = """<|im_start|>user""" + "\n" + h["user"] + "\n" + """<|im_end|>""" + "\n" + """<|im_start|>assistant""" + "\n" + (h.get("bot", "") + """<|im_end|>""" if h.get("bot") else "") + "\n" + history_text
-    #         if len(history_text) > approx_max_tokens*4:
-    #             break    
-    #     return history_text
+    def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
+        history_text = ""
+        for h in reversed(history if include_last_turn else history[:-1]):
+            history_text = """<|im_start|>user""" + "\n" + h["user"] + "\n" + """<|im_end|>""" + "\n" + """<|im_start|>assistant""" + "\n" + (h.get("bot", "") + """<|im_end|>""" if h.get("bot") else "") + "\n" + history_text
+            if len(history_text) > approx_max_tokens*4:
+                break    
+        return history_text
