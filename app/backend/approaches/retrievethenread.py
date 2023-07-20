@@ -80,21 +80,25 @@ Answer:
         prompt = (overrides.get("prompt_template") or self.template).format(q=q, retrieved=content)
 
         
-        max_time_limit = 6
+        #Setting max time limit for OpenAI search
+        max_time_limit = 4
 
+
+        #Start the threading, if the get_completion method takes to long(max_time_limit) the TimeoutError is triggered.
         try:
             with ThreadPoolExecutor() as executor:
                 future = executor.submit(self.get_completion, prompt, overrides)
                 completion = future.result(timeout=max_time_limit)
         
         except TimeoutError:
+            #Custom response for when it takes to long
             return {"data_points": results, "answer": "Request took too long to generate, pleasre try again:=)", "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
         
-
+        #Regular response for when timeouts doesnt happen.
         return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
 
 
-
+    #Query for the completion from OpenAI
     def get_completion(self, prompt, overrides):
         return openai.Completion.create(
             engine = self.openai_deployment,
