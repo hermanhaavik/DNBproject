@@ -5,8 +5,9 @@ from azure.search.documents.models import QueryType
 from langchain.llms.openai import AzureOpenAI
 from langchain.callbacks.manager import CallbackManager, Callbacks
 from langchain.chains import LLMChain
-from langchain.agents import Tool, AgentType, initialize_agent, ConversationalAgent
+from langchain.agents import Tool, AgentType, initialize_agent, ConversationalChatAgent
 from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_message_histories.in_memory import ChatMessageHistory
 from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
 from typing import Any, Sequence
@@ -29,12 +30,46 @@ class ChatReadRetrieveReadApproach(Approach):
 "You are an intelligent assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
 "If the question is incomplete, ask the user for more information. " \
 "If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
-"\n\nYou can access the following tools: "
+"For information in table format return it as an html table. Do not return markdown format. " \
+"Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
+"For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
+"It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
+"If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
+"Never quote tool names or chat history as sources." \
+"Answer in the same language as the question was asked. " 
 
-    memory = ConversationBufferMemory(memory_key = "chat_history")
+    #TODO
+    message_history = ChatMessageHistory()
+    
+    memory = ConversationBufferMemory(memory_key = "chat_history", chat_memory = message_history)
+
+    system_message = "You are an intelligent assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
+"If the question is incomplete, ask the user for more information. " \
+"If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
+"For information in table format return it as an html table. Do not return markdown format. " \
+"Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
+"For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
+"It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
+"If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
+"Never quote tool names or chat history as sources." \
+"Answer in the same language as the question was asked. " 
+    
+    human_message: str = """TOOLS
+------
+Assistant can ask the user to use tools to look up information that may be helpful in answering the users original question. The tools the human can use are:
+
+{tools}
+
+{format_instructions}
+
+USER'S INPUT
+--------------------
+Here is the user's input (remember to respond with a markdown code snippet of a json blob with a single action, and NOTHING else):
+
+{input}"""
 
     template_suffix = """
-Begin!
+Begin! 
 
 Previous conversation history:
 {memory}
@@ -67,15 +102,13 @@ New input:
 #     If the question is not in English, translate the question to English before generating the search query.
 
 # Chat History:
-# {memory}
+# {chat_history}
 
 # Question:
 # {question}
 
 # Search Query:
 # """
-    #ai_prefix = 
-
     human_prefix = \
 "For information in table format return it as an html table. Do not return markdown format. " \
 "Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
@@ -120,7 +153,7 @@ New input:
     def askUser(self, q: str) -> Any:
         return q
         
-    def run(self, history: Sequence[dict[str, str]], q: str, overrides: dict[str, Any]) -> Any:
+    def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         # Not great to keep this as instance state, won't work with interleaving (e.g. if using async), but keeps the example simple
         self.results = None
 
@@ -132,26 +165,29 @@ New input:
                         func=lambda q: self.retrieve(q, overrides), 
                         description=self.CognitiveSearchToolDescription,
                         callbacks=cb_manager)
-        ask_user_tool = Tool(name="AskUser",
-                        func=lambda q: self.askUser(q),
-                        description="Useful for asking the user for more information if the question is incomplete.",
-                        callbacks=cb_manager)
-        tools = [acs_tool, ask_user_tool]
+        # ask_user_tool = Tool(name="AskUser",
+        #                 func=lambda q: self.askUser(q),
+        #                 description="Useful for asking the user for more information if the question is incomplete.",
+        #                 callbacks=cb_manager)
+        tools: Sequence = [acs_tool]
 
-        prompt = ConversationalAgent.create_prompt(
+        prompt = ConversationalChatAgent.create_prompt(
+            system_message=self.system_message,
+            human_message=self.human_message,
             tools=tools,
-            prefix=overrides.get("prompt_template_prefix") or self.template_prefix,
-            suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
-            human_prefix=self.human_prefix,
-            format_instructions=self.format_instructions,
-            input_variables=["input", "agent_scratchpad"],
-            memory=self.get_chat_history_as_text(history, include_last_turn=False), question=history[-1]["user"])
-        
+            # prefix=overrides.get("prompt_template_prefix") or self.template_prefix,
+            # suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
+            # format_instructions=self.format_instructions,
+            # ai_prefix=self.ai_prefix,
+            # human_prefix=self.human_prefix,
+            input_variables=["input", "agent_scratchpad", "memory"],
+        )
+
         print(prompt)
         llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key)
         chain = LLMChain(llm = llm, prompt = prompt)
         conversational_agent = initialize_agent(
-            agent=ConversationalAgent(llm_chain = chain, tools = tools),
+            agent=ConversationalChatAgent(llm_chain = chain, tools = tools),
             tools=tools, 
             llm=llm,
             verbose=True,
