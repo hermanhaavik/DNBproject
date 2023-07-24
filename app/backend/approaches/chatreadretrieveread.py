@@ -58,15 +58,14 @@ class ChatReadRetrieveReadApproach(Approach):
 ------
 Assistant can ask the user to use tools to look up information that may be helpful in answering the users original question. The tools the human can use are:
 
-{tools}
-
+{{tools}}
 {format_instructions}
 
 USER'S INPUT
 --------------------
 Here is the user's input (remember to respond with a markdown code snippet of a json blob with a single action, and NOTHING else):
 
-{input}"""
+{{{{input}}}}"""
 
     template_suffix = """
 Begin! 
@@ -91,7 +90,7 @@ New input:
     
     ```
     Thought: Do I need to use a tool? No
-    {ai_prefix}: [your response here]
+    Answer: Your final answer. 
     """
 
    
@@ -187,14 +186,14 @@ New input:
         llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key)
         chain = LLMChain(llm = llm, prompt = prompt)
         conversational_agent = initialize_agent(
-            agent=ConversationalChatAgent(llm_chain = chain, tools = tools),
+            agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
             tools=tools, 
             llm=llm,
             verbose=True,
             max_iterations=5,
             memory=ConversationBufferMemory(memory_key = "chat_history"))
         
-        result = conversational_agent(q)
+        result = conversational_agent.run(history)
                 
         # Remove references to tool names that might be confused with a citation
         result = result.replace("[CognitiveSearch]", "")
