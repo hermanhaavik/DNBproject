@@ -56,9 +56,10 @@ Search query:
         self.content_field = content_field
 
     def __source_url_from_doc(self, doc: dict[str, str]):
-        sourcepage = doc[self.sourcepage_field]
-        without_suffix = re.sub(r'-(\d+)\.pdf$', '.pdf', sourcepage)
-        return without_suffix.replace('__', '/')
+        # sourcepage = doc[self.sourcepage_field]
+        # without_suffix = re.sub(r'-(\d+)\.pdf$', '.pdf', sourcepage)
+        # return without_suffix.replace('__', '/')
+        return doc["sourceurl"]
 
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         print("Starting answering process")

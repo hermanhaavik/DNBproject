@@ -42,7 +42,8 @@ parser.add_argument("--formrecognizerkey", required=False, help="Optional. Use t
 parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 args = parser.parse_args()
 
-urls = ["https://www.dnb.no/forsikring/bilforsikring"]
+# TODO: Read from arguments
+urls = ["www.dnb.no/forsikring/bilforsikring", "www.dnb.no/forsikring", "www.dnb.no/forsikring/husforsikring", "www.dnb.no/forsikring/innboforsikring", "www.dnb.no/forsikring/reiseforsikring", "www.dnb.no/forsikring/personforsikring", "www.dnb.no/forsikring/meld-skade", "www.dnb.no/forsikring/rabatt", "www.dnb.no/forsikring/best-i-test-forsikring", "www.dnb.no/forsikring/fremtind", "www.dnb.no/forsikring/verdisakforsikring", "www.dnb.no/forsikring/verdisakforsikring/sykkelforsikring", "www.dnb.no/forsikring/kjoretoy/sma-elektriske-kjoretoy", "www.dnb.no/forsikring/verdisakforsikring/bunadsforsikring", "www.dnb.no/forsikring/kjoretoy", "www.dnb.no/forsikring/kjoretoy/batforsikring", "www.dnb.no/forsikring/kjoretoy/motorsykkelforsikring", "www.dnb.no/forsikring/kjoretoy/bobilforsikring", "www.dnb.no/forsikring/kjoretoy/campingvognforsikring", "www.dnb.no/forsikring/kjoretoy/mopedforsikring", "www.dnb.no/forsikring/kjoretoy/snoscooterforsikring", "www.dnb.no/forsikring/kjoretoy/tilhengerforsikring"]
 
 # Use the current user identity to connect to Azure services unless a key is explicitly set for any of them
 azd_credential = AzureDeveloperCliCredential() if args.tenantid == None else AzureDeveloperCliCredential(tenant_id=args.tenantid, process_timeout=60)
@@ -151,7 +152,7 @@ def get_document_text_from_analysis_result(result: AnalyzeResult):
     return page_map
 
 def get_html_page_text(url):
-    req = Request(url)
+    req = Request(f"https://{url}")
     html_page = urlopen(req).read()
     soup = BeautifulSoup(html_page, "html.parser")
 
@@ -188,6 +189,7 @@ def get_html_page_text(url):
                     # Some cells use checkmarks instead of text
                     if len(content) == 0 and cell.find("svg"):
                         content = "X"
+
                     table_html += content
                     table_html += f"</{cell.name}>"
                 table_html += "</tr"
