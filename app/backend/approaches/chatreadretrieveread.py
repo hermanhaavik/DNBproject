@@ -7,7 +7,7 @@ from langchain.callbacks.manager import CallbackManager, Callbacks
 from langchain.chains import LLMChain
 from langchain.agents import Tool, AgentType, initialize_agent, ConversationalChatAgent
 from langchain.memory import ConversationBufferMemory
-from langchain.memory.chat_message_histories.in_memory import ChatMessageHistory
+from langchain.memory.chat_message_histories import RedisChatMessageHistory
 from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
 from typing import Any, Sequence
@@ -24,7 +24,6 @@ class ChatReadRetrieveReadApproach(Approach):
     [1] E. Karpas, et al. arXiv:2205.00445
     """
     
-  
 
     template_prefix = \
 "You are an intelligent assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
@@ -39,9 +38,18 @@ class ChatReadRetrieveReadApproach(Approach):
 "Answer in the same language as the question was asked. " 
 
     #TODO
-    message_history = ChatMessageHistory()
+    # r = redis.Redis(
+    #     host='redis-11296.c56.east-us.azure.cloud.redislabs.com',
+    #     port=11296,
+    #     password='jcMkaxq3GLa6F8aiGNVVwlfxuTpdXlxQ')
+    # message_history = RedisChatMessageHistory(url="redis-11296.c56.east-us.azure.cloud.redislabs.com:11296", 
+    #                                           ttl = 600, 
+    #                                           session_id = "my_session")
     
-    memory = ConversationBufferMemory(memory_key = "chat_history", chat_memory = message_history)
+    memory = ConversationBufferMemory(memory_key = "chat_history", 
+                                      input_key = "input",
+                                      output_key = "output", 
+                                      return_messages = True)
 
     system_message = "You are an intelligent assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
 "If the question is incomplete, ask the user for more information. " \
@@ -52,20 +60,21 @@ class ChatReadRetrieveReadApproach(Approach):
 "It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
 "If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
 "Never quote tool names or chat history as sources." \
-"Answer in the same language as the question was asked. " 
+"Answer in the same language as the question was asked. " \
+
     
     human_message: str = """TOOLS
 ------
 Assistant can ask the user to use tools to look up information that may be helpful in answering the users original question. The tools the human can use are:
 
-{{tools}}
+{tools}
 {format_instructions}
 
 USER'S INPUT
 --------------------
 Here is the user's input (remember to respond with a markdown code snippet of a json blob with a single action, and NOTHING else):
 
-{{{{input}}}}"""
+{input}"""
 
     template_suffix = """
 Begin! 
@@ -146,8 +155,8 @@ New input:
             self.results = [doc[self.sourcepage_field] + ":" + nonewlines(" -.- ".join([c.text for c in doc['@search.captions']])) for doc in r]
         else:
              self.results = [doc[self.sourcepage_field] + ":" + nonewlines(doc[self.content_field][:250]) for doc in r]
-        content = "\n".join(self.results)
-        return content
+        self.content = "\n".join(self.results)
+        return self.content
     
     def askUser(self, q: str) -> Any:
         return q
@@ -172,29 +181,31 @@ New input:
 
         prompt = ConversationalChatAgent.create_prompt(
             system_message=self.system_message,
-            human_message=self.human_message,
+            human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), input=self.memory),
             tools=tools,
             # prefix=overrides.get("prompt_template_prefix") or self.template_prefix,
             # suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
             # format_instructions=self.format_instructions,
             # ai_prefix=self.ai_prefix,
             # human_prefix=self.human_prefix,
-            input_variables=["input", "agent_scratchpad", "memory"],
-        )
+            input_variables=["input", "agent_scratchpad", "memory"])
 
         print(prompt)
         llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key)
-        chain = LLMChain(llm = llm, prompt = prompt)
+        
         conversational_agent = initialize_agent(
             agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
             tools=tools, 
             llm=llm,
             verbose=True,
             max_iterations=5,
-            memory=ConversationBufferMemory(memory_key = "chat_history"))
-        
-        result = conversational_agent.run(history)
-                
+            memory= ConversationBufferMemory(memory_key = "chat_history", 
+                                      input_key = "input",
+                                      output_key = "output", 
+                                      return_messages = True)
+            )
+        result = conversational_agent.run(history[-1].get("user"))
+        # result = llm_chain.predict(q)        
         # Remove references to tool names that might be confused with a citation
         result = result.replace("[CognitiveSearch]", "")
 
@@ -203,7 +214,7 @@ New input:
     def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
         history_text = ""
         for h in reversed(history if include_last_turn else history[:-1]):
-            history_text = """<|im_start|>user""" + "\n" + h["user"] + "\n" + """<|im_end|>""" + "\n" + """<|im_start|>assistant""" + "\n" + (h.get("bot", "") + """<|im_end|>""" if h.get("bot") else "") + "\n" + history_text
+            history_text += """<|im_start|>user""" + "\n" + h["user"] + "\n" + """<|im_end|>""" + "\n" + """<|im_start|>assistant""" + "\n" + (h.get("bot", "") + """<|im_end|>""" if h.get("bot") else "") + "\n" + history_text
             if len(history_text) > approx_max_tokens*4:
                 break    
         return history_text
