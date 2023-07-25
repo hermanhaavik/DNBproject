@@ -3,3 +3,4 @@ azure-identity==1.13.0
 azure-search-documents==11.4.0b3
 azure-ai-formrecognizer==3.3.0b1
 azure-storage-blob==12.14.1
+beautifulsoup4==4.12.2 

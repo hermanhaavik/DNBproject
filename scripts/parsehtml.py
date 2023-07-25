@@ -29,11 +29,25 @@ def beautifulsoup_parse_html():
     result = ""
 
     for section in soup.select("div[data-section-index]"):
-        print(section["data-section-index"])
         section_type = section["data-section-type"]
+        section_text = ""
         if section_type in ["pageTitle", "text"]:
             # TODO: Handle hyperlinks
-            result = "\n".join([result, section.get_text(strip=True, separator=": ")])
+            section_text = section.get_text(strip=True, separator=": ")
+        elif section_type == "faqs":
+            heading = section.find("h2")
+            if heading:
+                section_text += heading.get_text(strip=True)
+            for qa in section.select("div[class*='dnb-accordion']"):
+                question = qa.find("div[class*='dnb-accordion__header']")
+                if question:
+                    section_text = "\n".join([section_text, question.get_text(strip=True)])
+                for elem in qa.find_all(["h3", "ul", "p"]):
+                    if elem.name == "ul":
+                        for item in elem.find_all("li"):
+                            section_text += f"\n- {item.get_text(strip=True)}"
+                    else:
+                        section_text = "\n".join([section_text, elem.get_text(strip=True)])
         elif section_type == "comparisonTable":
             table_html = "<table>"
             table = section.find("table")
@@ -42,7 +56,7 @@ def beautifulsoup_parse_html():
                 for cell in row.find_all(["td", "th"]):
                     table_html += f"<{cell.name}>"
                     content = cell.get_text(strip=True)
-                    # Some cells use svgs instead of text
+                    # Some cells use checkmarks instead of text
                     if len(content) == 0 and cell.find("svg"):
                         content = "X"
                     table_html += content
@@ -50,7 +64,9 @@ def beautifulsoup_parse_html():
                 table_html += "</tr"
             table_html += "</table>"
 
-            result = "\n".join([result, table_html])
+            section_text = table_html
+
+        result = "\n".join([result, section_text])
 
     return result
 
