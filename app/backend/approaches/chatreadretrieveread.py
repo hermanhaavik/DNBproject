@@ -2,12 +2,10 @@ import openai
 from approaches.approach import Approach
 from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
-from langchain.llms.openai import AzureOpenAI
+from langchain.chat_models import AzureChatOpenAI
 from langchain.callbacks.manager import CallbackManager, Callbacks
-from langchain.chains import LLMChain
 from langchain.agents import Tool, AgentType, initialize_agent, ConversationalChatAgent
 from langchain.memory import ConversationBufferMemory
-from langchain.memory.chat_message_histories import RedisChatMessageHistory
 from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
 from typing import Any, Sequence
@@ -128,9 +126,9 @@ New input:
     
     CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance car insurance, etc."
 
-    def __init__(self, search_client: SearchClient, openai_deployment: str, sourcepage_field: str, content_field: str):
+    def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
-        self.openai_deployment = openai_deployment
+        self.chatgpt_deployment = chatgpt_deployment
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
 
@@ -191,8 +189,8 @@ New input:
             input_variables=["input", "agent_scratchpad", "memory"])
 
         print(prompt)
-        llm = AzureOpenAI(deployment_name=self.openai_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key)
-        
+        llm = AzureChatOpenAI(deployment_name=self.chatgpt_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key, openai_api_base=openai.api_base, openai_api_version=openai.api_version)
+        print(llm("How are you?"))
         conversational_agent = initialize_agent(
             agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
             tools=tools, 
