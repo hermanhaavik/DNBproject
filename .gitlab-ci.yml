@@ -87,6 +87,7 @@ safety_scan:
   stage: CD 
   image: python:latest 
   script:
+    - pip install safety
     - cd ./app/backend/
     - pip install -r requirements.txt
     - safety check  
