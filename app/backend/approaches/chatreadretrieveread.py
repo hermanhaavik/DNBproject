@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import re
 from typing import Any, Sequence
 
@@ -128,6 +129,15 @@ Search query:
         else:
             prompt = prompt_override.format(sources=content, chat_history=self.get_chat_history_as_text(history), follow_up_questions_prompt=follow_up_questions_prompt)
 
+        max_time_limit = 4
+
+#Implementation of timeout in chat approach.
+        try:
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(self.get_completion,prompt, overrides)
+                completion = future.result(timeout=max_time_limit)
+        except TimeoutError:
+            return {"data_points": results, "answer": "Took to long for OpenAI to create answer, please try again:)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
         # STEP 3: Generate a contextual and content specific answer using the search results and chat history
         completion = openai.Completion.create(
             engine=self.chatgpt_deployment, 
