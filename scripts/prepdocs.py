@@ -43,7 +43,7 @@ parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output
 args = parser.parse_args()
 
 # TODO: Read from arguments
-urls = ["www.dnb.no/forsikring/bilforsikring", "www.dnb.no/forsikring", "www.dnb.no/forsikring/husforsikring", "www.dnb.no/forsikring/innboforsikring", "www.dnb.no/forsikring/reiseforsikring", "www.dnb.no/forsikring/personforsikring", "www.dnb.no/forsikring/meld-skade", "www.dnb.no/forsikring/rabatt", "www.dnb.no/forsikring/best-i-test-forsikring", "www.dnb.no/forsikring/fremtind", "www.dnb.no/forsikring/verdisakforsikring", "www.dnb.no/forsikring/verdisakforsikring/sykkelforsikring", "www.dnb.no/forsikring/kjoretoy/sma-elektriske-kjoretoy", "www.dnb.no/forsikring/verdisakforsikring/bunadsforsikring", "www.dnb.no/forsikring/kjoretoy", "www.dnb.no/forsikring/kjoretoy/batforsikring", "www.dnb.no/forsikring/kjoretoy/motorsykkelforsikring", "www.dnb.no/forsikring/kjoretoy/bobilforsikring", "www.dnb.no/forsikring/kjoretoy/campingvognforsikring", "www.dnb.no/forsikring/kjoretoy/mopedforsikring", "www.dnb.no/forsikring/kjoretoy/snoscooterforsikring", "www.dnb.no/forsikring/kjoretoy/tilhengerforsikring"]
+urls = ["www.dnb.no/forsikring/bilforsikring", "www.dnb.no/forsikring", "www.dnb.no/forsikring/husforsikring", "www.dnb.no/forsikring/innboforsikring", "www.dnb.no/forsikring/reiseforsikring", "www.dnb.no/forsikring/personforsikring", "www.dnb.no/forsikring/meld-skade", "www.dnb.no/forsikring/rabatt", "www.dnb.no/forsikring/best-i-test-forsikring", "www.dnb.no/forsikring/fremtind", "www.dnb.no/forsikring/verdisakforsikring", "www.dnb.no/forsikring/verdisakforsikring/sykkelforsikring", "www.dnb.no/forsikring/kjoretoy/sma-elektriske-kjoretoy", "www.dnb.no/forsikring/verdisakforsikring/bunadsforsikring", "www.dnb.no/forsikring/kjoretoy", "www.dnb.no/forsikring/kjoretoy/batforsikring", "www.dnb.no/forsikring/kjoretoy/motorsykkelforsikring", "www.dnb.no/forsikring/kjoretoy/bobilforsikring", "www.dnb.no/forsikring/kjoretoy/campingvognforsikring", "www.dnb.no/forsikring/kjoretoy/mopedforsikring", "www.dnb.no/forsikring/kjoretoy/snoscooterforsikring", "www.dnb.no/forsikring/kjoretoy/tilhengerforsikring", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_ansvar_bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Minikasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Kasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Toppkasko_Bil.pdf", "dokument.fremtind.no/ipid/IPID_BIL.pdf"]
 
 # Use the current user identity to connect to Azure services unless a key is explicitly set for any of them
 azd_credential = AzureDeveloperCliCredential() if args.tenantid == None else AzureDeveloperCliCredential(tenant_id=args.tenantid, process_timeout=60)
@@ -208,7 +208,7 @@ def get_html_page_text(url):
 def get_document_text_from_url(url):
     if args.verbose: print(f"Extracting text from '{url}' using Azure Form Recognizer")
     form_recognizer_client = DocumentAnalysisClient(endpoint=f"https://{args.formrecognizerservice}.cognitiveservices.azure.com/", credential=formrecognizer_creds, headers={"x-ms-useragent": "azure-search-chat-demo/1.0.0"})
-    poller = form_recognizer_client.begin_analyze_document_from_url("prebuilt-layout", url)
+    poller = form_recognizer_client.begin_analyze_document_from_url("prebuilt-layout", f"https://{url}")
     form_recognizer_results = poller.result()
 
     return get_document_text_from_analysis_result(form_recognizer_results)
@@ -233,56 +233,6 @@ def get_document_text_from_file(filename):
         form_recognizer_results = poller.result()
 
         return get_document_text_from_analysis_result(form_recognizer_results)
-
-
-# TODO: Remove
-def get_document_text(filename):
-    offset = 0
-    page_map = []
-    if args.localpdfparser:
-        reader = PdfReader(filename)
-        pages = reader.pages
-        for page_num, p in enumerate(pages):
-            page_text = p.extract_text()
-            page_map.append((page_num, offset, page_text))
-            offset += len(page_text)
-    else:
-        if args.verbose: print(f"Extracting text from '{filename}' using Azure Form Recognizer")
-        form_recognizer_client = DocumentAnalysisClient(endpoint=f"https://{args.formrecognizerservice}.cognitiveservices.azure.com/", credential=formrecognizer_creds, headers={"x-ms-useragent": "azure-search-chat-demo/1.0.0"})
-        with open(filename, "rb") as f:
-            poller = form_recognizer_client.begin_analyze_document("prebuilt-layout", document = f)
-        form_recognizer_results = poller.result()
-
-        for page_num, page in enumerate(form_recognizer_results.pages):
-            tables_on_page = [table for table in form_recognizer_results.tables if table.bounding_regions[0].page_number == page_num + 1]
-
-            # mark all positions of the table spans in the page
-            page_offset = page.spans[0].offset
-            page_length = page.spans[0].length
-            table_chars = [-1]*page_length
-            for table_id, table in enumerate(tables_on_page):
-                for span in table.spans:
-                    # replace all table spans with "table_id" in table_chars array
-                    for i in range(span.length):
-                        idx = span.offset - page_offset + i
-                        if idx >=0 and idx < page_length:
-                            table_chars[idx] = table_id
-
-            # build page text by replacing charcters in table spans with table html
-            page_text = ""
-            added_tables = set()
-            for idx, table_id in enumerate(table_chars):
-                if table_id == -1:
-                    page_text += form_recognizer_results.content[page_offset + idx]
-                elif not table_id in added_tables:
-                    page_text += table_to_html(tables_on_page[table_id])
-                    added_tables.add(table_id)
-
-            page_text += " "
-            page_map.append((page_num, offset, page_text))
-            offset += len(page_text)
-
-    return page_map
 
 def split_text(page_map):
     SENTENCE_ENDINGS = [".", "!", "?"]
@@ -355,7 +305,7 @@ def create_sections_for_file(filename, page_map):
         }
 
 def create_id_from_url(url):
-    return os.path.basename(url)
+    return re.sub(".pdf", "", os.path.basename(url))
 
 def create_sections_for_webpage(url, page_map):
     for i, (section, pagenum) in enumerate(split_text(page_map)):
@@ -372,6 +322,7 @@ def create_search_index():
     if args.verbose: print(f"Ensuring search index {args.index} exists")
     index_client = SearchIndexClient(endpoint=f"https://{args.searchservice}.search.windows.net/",
                                      credential=search_creds)
+
     if args.index not in index_client.list_index_names():
         index = SearchIndex(
             name=args.index,
@@ -437,6 +388,7 @@ else:
     if not args.remove:
         create_search_index()
     
+    # TODO: Decide if the script should still support local files
     # print(f"Processing files...")
     # for filename in glob.glob(args.files):
     #     if args.verbose: print(f"Processing '{filename}'")
@@ -455,7 +407,6 @@ else:
 
     print("Processing urls...")
     for url in urls:
-        print(os.path.basename(url))
         if args.verbose: print(f"Processing '{url}'")
 
         if ".pdf" in url:
