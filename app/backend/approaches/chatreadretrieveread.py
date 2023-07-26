@@ -6,6 +6,7 @@ from langchain.chat_models import AzureChatOpenAI
 from langchain.callbacks.manager import CallbackManager, Callbacks
 from langchain.agents import Tool, AgentType, initialize_agent, ConversationalChatAgent
 from langchain.memory import ConversationBufferMemory
+from langchain.schema import HumanMessage
 from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
 from typing import Any, Sequence
@@ -189,8 +190,14 @@ New input:
             input_variables=["input", "agent_scratchpad", "memory"])
 
         print(prompt)
-        llm = AzureChatOpenAI(deployment_name=self.chatgpt_deployment, temperature=overrides.get("temperature") or 0, openai_api_key=openai.api_key, openai_api_base=openai.api_base, openai_api_version=openai.api_version)
-        print(llm("How are you?"))
+        print(openai.api_version)
+        llm = AzureChatOpenAI(deployment_name=self.chatgpt_deployment, 
+                              temperature=overrides.get("temperature") or 0, 
+                              openai_api_key=openai.api_key, 
+                              openai_api_base=openai.api_base, 
+                              openai_api_version=openai.api_version)
+        # print([llm(HumanMessage(content='How are you?'))])
+        print(openai.api_version)
         conversational_agent = initialize_agent(
             agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
             tools=tools, 
@@ -206,7 +213,6 @@ New input:
         # result = llm_chain.predict(q)        
         # Remove references to tool names that might be confused with a citation
         result = result.replace("[CognitiveSearch]", "")
-
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
 
     def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
@@ -214,5 +220,5 @@ New input:
         for h in reversed(history if include_last_turn else history[:-1]):
             history_text += """<|im_start|>user""" + "\n" + h["user"] + "\n" + """<|im_end|>""" + "\n" + """<|im_start|>assistant""" + "\n" + (h.get("bot", "") + """<|im_end|>""" if h.get("bot") else "") + "\n" + history_text
             if len(history_text) > approx_max_tokens*4:
-                break    
+                break
         return history_text
