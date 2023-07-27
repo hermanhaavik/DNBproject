@@ -4,6 +4,7 @@ from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from text import nonewlines
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 
 class RetrieveThenReadApproach(Approach):
@@ -51,6 +52,8 @@ Answer:
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
 
+
+
     def run(self, q: str, overrides: dict[str, Any]) -> Any:
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 3
@@ -75,12 +78,58 @@ Answer:
         content = "\n".join(results)
 
         prompt = (overrides.get("prompt_template") or self.template).format(q=q, retrieved=content)
+
+        
+        #Setting max time limit for OpenAI search
+        max_time_limit = 4
+
+
+        #Start the threading, if the get_completion method takes to long(max_time_limit) the TimeoutError is triggered.
+        try:
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(self.get_completion, prompt, overrides)
+                completion = future.result(timeout=max_time_limit)
+        
+        except TimeoutError:
+            #Custom response for when it takes to long
+            return {"data_points": results, "answer": "Request took too long to generate, pleasre try again:=)", "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+        
+        #Regular response for when timeouts doesnt happen.
+        return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+
+
+    #Query for the completion from OpenAI
+    def get_completion(self, prompt, overrides):
+        return openai.Completion.create(
+            engine = self.openai_deployment,
+            prompt = prompt,
+            temperature = overrides.get("temperature") or 0.3,
+            max_tokens = 1024,
+            n = 1,
+            stop = ["\n"]
+
+        )
+       
+    """
+        #Setting the starttime for the counter
+        start_time = time.time()
         completion = openai.Completion.create(
-            engine=self.openai_deployment, 
-            prompt=prompt, 
-            temperature=overrides.get("temperature") or 0.3, 
-            max_tokens=1024, 
-            n=1, 
-            stop=["\n"])
+            engine=self.openai_deployment,
+            stream=True,
+            prompt=prompt,
+            temperature=overrides.get("temperature") or 0.3,
+            max_tokens=1024,
+            n=1,
+            stop=["\n"]
+)
+        
+        #Finding how long has elapsed since start of request
+        elapsed_time = time.time()- start_time
+
+        if (elapsed_time >= 10):
+            return {"data_points": results, "answer": "Request took to long... Please try again", "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
 
         return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+    
+
+    """
