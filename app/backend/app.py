@@ -90,7 +90,7 @@ def content_file(path):
     blob.readinto(blob_file)
     blob_file.seek(0)
     return send_file(blob_file, mimetype=mime_type, as_attachment=False, download_name=path)
-    
+
 @app.route("/ask", methods=["POST"])
 def ask():
     ensure_openai_token()

@@ -108,9 +108,9 @@ Search query:
             r = self.search_client.search(q, filter=filter, top=top)
 
         if use_semantic_captions:
-            results = [self.__source_url_from_doc(doc) + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
         else:
-            results = [self.__source_url_from_doc(doc) + ": " + nonewlines(doc[self.content_field]) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r]
         content = "\n".join(results)
 
         print(f"Finished step 2 in {time.time() - step_time} seconds")
