@@ -84,13 +84,14 @@ Search query:
             temperature=0.0, 
             max_tokens=32, 
             n=1, 
-            stop=["\n"],
-            stream=True)
+            stop=["\n"])
 
-        q = ''
-        for i, chunk in enumerate(completion):
-            print(f"Query chunk {i}: {chunk.choices[0].text}")
-            q += chunk.choices[0].text
+        q = completion.choices[0].text
+        # print(completion)
+        # for i, chunk in enumerate(completion):
+        #     print(i, chunk)
+        #     print(f"Query chunk {i}: {chunk.choices[0].text}")
+        #     q += chunk.choices[0].text
 
         print(f"Finished step 1 in {time.time() - step_time} seconds")
 
@@ -158,12 +159,6 @@ Search query:
             stop=["<|im_end|>", "<|im_start|>"],
             stream=True)
         """
-        
-        print(completion)
-        answer = ''
-        for i, chunk in enumerate(completion):
-            print(f"Answer chunk {i}: {chunk.choices[0].text}")
-            answer += chunk.choices[0].text
 
         print(f"Finished step 3 in {time.time() - step_time} seconds")
 
