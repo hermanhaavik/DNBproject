@@ -42,9 +42,11 @@ openai.api_base = f"https://{AZURE_OPENAI_SERVICE}.openai.azure.com"
 openai.api_version = "2022-12-01"
 
 # Comment these two lines out if using keys, set your API key in the OPENAI_API_KEY environment variable instead
+print("Obtaining key...")
 openai.api_type = "azure_ad"
 openai_token = azure_credential.get_token("https://cognitiveservices.azure.com/.default")
 openai.api_key = openai_token.token
+print("Key obtained:)")
 
 # Set up clients for Cognitive Search and Storage
 search_client = SearchClient(
