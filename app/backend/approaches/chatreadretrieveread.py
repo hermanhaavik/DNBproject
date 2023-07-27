@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 import re
 from typing import Any, Sequence
 
@@ -17,10 +18,12 @@ class ChatReadRetrieveReadApproach(Approach):
     """
 
     prompt_prefix = """<|im_start|>system
-Assistant helps the customers of DNB bank with their questions about insurance. Be brief in your answers. Only answer questions about DNB insurance. If you get questions about other insurance providers, tell a joke about insurance. 
+You are an assistant helps the customers of DNB bank with their questions about insurance, your name is Floyd. Be brief in your answers. Only answer questions about DNB insurance. If you get questions about other insurance providers, tell a joke about insurance. 
 Answer ONLY with the facts listed in the list of sources below. If there isn't enough information below, say you don't know. Do not generate answers that don't use the sources below. If asking a clarifying question to the user would help, ask the question.
 For tabular information return it as an html table. Do not return markdown format.
 Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
+Make sure to be polite and if its a question you cant answer guide the customers to either a branch office or https://www.dnb.no/en/insurance/house-insurance. 
+It is very very important that you only answer questions that are DNB related or insurance related. Nothing else shall be answered, just state you dont know.
 {follow_up_questions_prompt}
 {injected_prompt}
 Sources:
@@ -130,15 +133,22 @@ Search query:
             prompt = prompt_override.format(sources=content, chat_history=self.get_chat_history_as_text(history), follow_up_questions_prompt=follow_up_questions_prompt)
 
         max_time_limit = 4
+        print(f"Max time limit for question answering has been set to {max_time_limit} seconds")
 
 #Implementation of timeout in chat approach.
-        try:
-            with ThreadPoolExecutor() as executor:
-                future = executor.submit(self.get_completion,prompt, overrides)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            print("Starting question answering thread")
+            future = executor.submit(self.get_completion,prompt, overrides)
+
+            try:
                 completion = future.result(timeout=max_time_limit)
-        except TimeoutError:
-            return {"data_points": results, "answer": "Took to long for OpenAI to create answer, please try again:)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
-        # STEP 3: Generate a contextual and content specific answer using the search results and chat history
+            except TimeoutError:
+                print(f"Answer generation timed out... Took more than {max_time_limit} seconds")
+                return {"data_points": results, "answer": "Took to long for OpenAI to create answer, please try again:)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+        # STEP 3: Generate a contextual and content specific answer using the search results and chat history, 
+     
+        """
         completion = openai.Completion.create(
             engine=self.chatgpt_deployment, 
             prompt=prompt, 
@@ -147,7 +157,9 @@ Search query:
             n=1, 
             stop=["<|im_end|>", "<|im_start|>"],
             stream=True)
-
+        """
+        
+        print(completion)
         answer = ''
         for i, chunk in enumerate(completion):
             print(f"Answer chunk {i}: {chunk.choices[0].text}")
@@ -166,3 +178,17 @@ Search query:
             if len(history_text) > approx_max_tokens*4:
                 break    
         return history_text
+
+
+    def get_completion(self, prompt, overrides):
+        return openai.Completion.create(
+            engine=self.chatgpt_deployment, 
+            prompt=prompt, 
+            temperature=overrides.get("temperature") or 0.7, 
+            max_tokens=1024, 
+            n=1, 
+            stop=["<|im_end|>", "<|im_start|>"],
+            stream=True
+            )
+
+        
