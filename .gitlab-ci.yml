@@ -79,3 +79,15 @@ deploy:
     - azd up -e cicd --no-prompt  
   rules:
     - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
+
+
+
+
+safety_scan:
+  stage: CD 
+  image: python:latest 
+  script:
+    - pip install safety
+    - cd ./app/backend/
+    - pip install -r requirements.txt
+    - safety check  
