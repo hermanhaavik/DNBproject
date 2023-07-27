@@ -301,7 +301,6 @@ def create_sections_for_file(filename, page_map):
             "category": args.category,
             "sourcepage": blob_name_from_file_page(filename, pagenum),
             "sourcefile": filename,
-            "sourceurl": ""
         }
 
 def create_id_from_url(url):
@@ -314,8 +313,7 @@ def create_sections_for_webpage(url, page_map):
             "content": section,
             "category": args.category,
             "sourcepage": blob_name_from_file_page(url, pagenum),
-            "sourcefile": "",
-            "sourceurl": url
+            "sourcefile": url,
         }
 
 def create_search_index():
@@ -332,7 +330,6 @@ def create_search_index():
                 SimpleField(name="category", type="Edm.String", filterable=True, facetable=True),
                 SimpleField(name="sourcepage", type="Edm.String", filterable=True, facetable=True),
                 SimpleField(name="sourcefile", type="Edm.String", filterable=True, facetable=True),
-                SimpleField(name="sourceurl", type="Edm.String", filterable=True, facetable=True)
             ],
             semantic_settings=SemanticSettings(
                 configurations=[SemanticConfiguration(
@@ -388,32 +385,30 @@ else:
     if not args.remove:
         create_search_index()
     
-    # TODO: Decide if the script should still support local files
-    # print(f"Processing files...")
-    # for filename in glob.glob(args.files):
-    #     if args.verbose: print(f"Processing '{filename}'")
-    #     if args.remove:
-    #         remove_blobs(filename)
-    #         remove_from_index(filename)
-    #     elif args.removeall:
-    #         remove_blobs(None)
-    #         remove_from_index(None)
-    #     else:
-    #         if not args.skipblobs:
-    #             upload_blobs(filename)
-    #         page_map = get_document_text_from_file(filename)
-    #         sections = create_sections_for_file(os.path.basename(filename), page_map)
-    #         index_sections(os.path.basename(filename), sections)
-
-    print("Processing urls...")
-    for url in urls:
-        if args.verbose: print(f"Processing '{url}'")
-
-        if ".pdf" in url:
-            page_map = get_document_text_from_url(url)
+    print(f"Processing files...")
+    for filename in glob.glob(args.files):
+        if args.verbose: print(f"Processing '{filename}'")
+        if args.remove:
+            remove_blobs(filename)
+            remove_from_index(filename)
+        elif args.removeall:
+            remove_blobs(None)
+            remove_from_index(None)
         else:
-            page_map = get_html_page_text(url)
+            if not args.skipblobs:
+                upload_blobs(filename)
+            page_map = get_document_text_from_file(filename)
+            sections = create_sections_for_file(os.path.basename(filename), page_map)
+            index_sections(os.path.basename(filename), sections)
 
-        sections = create_sections_for_webpage(url, page_map)
-        index_sections(os.path.basename(url), sections)
-
+    # print("Processing urls...")
+    # for url in urls:
+    #     if args.verbose: print(f"Processing '{url}'")
+    #
+    #     if ".pdf" in url:
+    #         page_map = get_document_text_from_url(url)
+    #     else:
+    #         page_map = get_html_page_text(url)
+    #
+    #     sections = create_sections_for_webpage(url, page_map)
+    #     index_sections(os.path.basename(url), sections)
