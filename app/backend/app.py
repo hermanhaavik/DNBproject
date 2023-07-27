@@ -13,6 +13,10 @@ from approaches.readdecomposeask import ReadDecomposeAsk
 from approaches.chatretrievethenread import ChatRetrieveThenReadApproach
 from approaches.chatreadretrieveread import ChatReadRetrieveReadApproach
 from azure.storage.blob import BlobServiceClient
+import mimetypes
+
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('text/css', '.css')
 
 # Replace these with your own values, either in environment variables or directly here
 AZURE_STORAGE_ACCOUNT = os.environ.get("AZURE_STORAGE_ACCOUNT") or "mystorageaccount"
@@ -88,7 +92,7 @@ def content_file(path):
     blob.readinto(blob_file)
     blob_file.seek(0)
     return send_file(blob_file, mimetype=mime_type, as_attachment=False, download_name=path)
-    
+
 @app.route("/ask", methods=["POST"])
 def ask():
     ensure_openai_token()

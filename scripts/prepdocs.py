@@ -13,6 +13,8 @@ from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import *
 from azure.search.documents import SearchClient
 from azure.ai.formrecognizer import DocumentAnalysisClient
+from urllib.request import Request, urlopen
+from bs4 import BeautifulSoup
 
 MAX_SECTION_LENGTH = 1000
 SENTENCE_SEARCH_LIMIT = 100
@@ -39,6 +41,9 @@ parser.add_argument("--formrecognizerservice", required=False, help="Optional. N
 parser.add_argument("--formrecognizerkey", required=False, help="Optional. Use this Azure Form Recognizer account key instead of the current user identity to login (use az login to set current user for Azure)")
 parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 args = parser.parse_args()
+
+# TODO: Read from arguments
+urls = ["www.dnb.no/forsikring/bilforsikring", "www.dnb.no/forsikring", "www.dnb.no/forsikring/husforsikring", "www.dnb.no/forsikring/innboforsikring", "www.dnb.no/forsikring/reiseforsikring", "www.dnb.no/forsikring/personforsikring", "www.dnb.no/forsikring/meld-skade", "www.dnb.no/forsikring/rabatt", "www.dnb.no/forsikring/best-i-test-forsikring", "www.dnb.no/forsikring/fremtind", "www.dnb.no/forsikring/verdisakforsikring", "www.dnb.no/forsikring/verdisakforsikring/sykkelforsikring", "www.dnb.no/forsikring/kjoretoy/sma-elektriske-kjoretoy", "www.dnb.no/forsikring/verdisakforsikring/bunadsforsikring", "www.dnb.no/forsikring/kjoretoy", "www.dnb.no/forsikring/kjoretoy/batforsikring", "www.dnb.no/forsikring/kjoretoy/motorsykkelforsikring", "www.dnb.no/forsikring/kjoretoy/bobilforsikring", "www.dnb.no/forsikring/kjoretoy/campingvognforsikring", "www.dnb.no/forsikring/kjoretoy/mopedforsikring", "www.dnb.no/forsikring/kjoretoy/snoscooterforsikring", "www.dnb.no/forsikring/kjoretoy/tilhengerforsikring", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_ansvar_bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Minikasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Kasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Toppkasko_Bil.pdf", "dokument.fremtind.no/ipid/IPID_BIL.pdf"]
 
 # Use the current user identity to connect to Azure services unless a key is explicitly set for any of them
 azd_credential = AzureDeveloperCliCredential() if args.tenantid == None else AzureDeveloperCliCredential(tenant_id=args.tenantid, process_timeout=60)
@@ -112,16 +117,114 @@ def table_to_html(table):
     table_html += "</table>"
     return table_html
 
-def get_document_text(filename):
+def get_document_text_from_analysis_result(result: AnalyzeResult):
     offset = 0
     page_map = []
+    for page_num, page in enumerate(result.pages):
+        tables_on_page = [table for table in result.tables if table.bounding_regions[0].page_number == page_num + 1]
+
+        # mark all positions of the table spans in the page
+        page_offset = page.spans[0].offset
+        page_length = page.spans[0].length
+        table_chars = [-1]*page_length
+        for table_id, table in enumerate(tables_on_page):
+            for span in table.spans:
+                # replace all table spans with "table_id" in table_chars array
+                for i in range(span.length):
+                    idx = span.offset - page_offset + i
+                    if idx >=0 and idx < page_length:
+                        table_chars[idx] = table_id
+
+        # build page text by replacing charcters in table spans with table html
+        page_text = ""
+        added_tables = set()
+        for idx, table_id in enumerate(table_chars):
+            if table_id == -1:
+                page_text += result.content[page_offset + idx]
+            elif not table_id in added_tables:
+                page_text += table_to_html(tables_on_page[table_id])
+                added_tables.add(table_id)
+
+        page_text += " "
+        page_map.append((page_num, offset, page_text))
+        offset += len(page_text)
+
+    return page_map
+
+def get_html_page_text(url):
+    req = Request(f"https://{url}")
+    html_page = urlopen(req).read()
+    soup = BeautifulSoup(html_page, "html.parser")
+
+    page_text = ""
+
+    for section in soup.select("div[data-section-index]"):
+        section_type = section["data-section-type"]
+        section_text = ""
+        if section_type in ["pageTitle", "text"]:
+            # TODO: Handle hyperlinks
+            section_text = section.get_text(strip=True, separator=": ")
+        elif section_type == "faqs":
+            heading = section.find("h2")
+            if heading:
+                section_text += heading.get_text(strip=True)
+            for qa in section.select("div[class*='dnb-accordion']"):
+                question = qa.find("div[class*='dnb-accordion__header']")
+                if question:
+                    section_text = "\n".join([section_text, question.get_text(strip=True)])
+                for elem in qa.find_all(["h3", "ul", "p"]):
+                    if elem.name == "ul":
+                        for item in elem.find_all("li"):
+                            section_text += f"\n- {item.get_text(strip=True)}"
+                    else:
+                        section_text = "\n".join([section_text, elem.get_text(strip=True)])
+        elif section_type == "comparisonTable":
+            table_html = "<table>"
+            table = section.find("table")
+            for row in table.find_all("tr"):
+                table_html += "<tr>"
+                for cell in row.find_all(["td", "th"]):
+                    table_html += f"<{cell.name}>"
+                    content = cell.get_text(strip=True)
+                    # Some cells use checkmarks instead of text
+                    if len(content) == 0 and cell.find("svg"):
+                        content = "X"
+
+                    table_html += content
+                    table_html += f"</{cell.name}>"
+                table_html += "</tr"
+            table_html += "</table>"
+
+            section_text = table_html
+
+        page_text = "\n".join([page_text, section_text])
+
+    page_num = 0
+    offset = 0
+    page_map = [(page_num, offset, page_text)]
+
+    return page_map
+
+def get_document_text_from_url(url):
+    if args.verbose: print(f"Extracting text from '{url}' using Azure Form Recognizer")
+    form_recognizer_client = DocumentAnalysisClient(endpoint=f"https://{args.formrecognizerservice}.cognitiveservices.azure.com/", credential=formrecognizer_creds, headers={"x-ms-useragent": "azure-search-chat-demo/1.0.0"})
+    poller = form_recognizer_client.begin_analyze_document_from_url("prebuilt-layout", f"https://{url}")
+    form_recognizer_results = poller.result()
+
+    return get_document_text_from_analysis_result(form_recognizer_results)
+
+def get_document_text_from_file(filename):
     if args.localpdfparser:
         reader = PdfReader(filename)
         pages = reader.pages
+        offset = 0
+        page_map = []
         for page_num, p in enumerate(pages):
             page_text = p.extract_text()
             page_map.append((page_num, offset, page_text))
             offset += len(page_text)
+
+        return page_map
     else:
         if args.verbose: print(f"Extracting text from '{filename}' using Azure Form Recognizer")
         form_recognizer_client = DocumentAnalysisClient(endpoint=f"https://{args.formrecognizerservice}.cognitiveservices.azure.com/", credential=formrecognizer_creds, headers={"x-ms-useragent": "azure-search-chat-demo/1.0.0"})
@@ -129,41 +232,11 @@ def get_document_text(filename):
             poller = form_recognizer_client.begin_analyze_document("prebuilt-layout", document = f)
         form_recognizer_results = poller.result()
 
-        for page_num, page in enumerate(form_recognizer_results.pages):
-            tables_on_page = [table for table in form_recognizer_results.tables if table.bounding_regions[0].page_number == page_num + 1]
-
-            # mark all positions of the table spans in the page
-            page_offset = page.spans[0].offset
-            page_length = page.spans[0].length
-            table_chars = [-1]*page_length
-            for table_id, table in enumerate(tables_on_page):
-                for span in table.spans:
-                    # replace all table spans with "table_id" in table_chars array
-                    for i in range(span.length):
-                        idx = span.offset - page_offset + i
-                        if idx >=0 and idx < page_length:
-                            table_chars[idx] = table_id
-
-            # build page text by replacing charcters in table spans with table html
-            page_text = ""
-            added_tables = set()
-            for idx, table_id in enumerate(table_chars):
-                if table_id == -1:
-                    page_text += form_recognizer_results.content[page_offset + idx]
-                elif not table_id in added_tables:
-                    page_text += table_to_html(tables_on_page[table_id])
-                    added_tables.add(table_id)
-
-            page_text += " "
-            page_map.append((page_num, offset, page_text))
-            offset += len(page_text)
-
-    return page_map
+        return get_document_text_from_analysis_result(form_recognizer_results)
 
 def split_text(page_map):
     SENTENCE_ENDINGS = [".", "!", "?"]
     WORDS_BREAKS = [",", ";", ":", " ", "(", ")", "[", "]", "{", "}", "\t", "\n"]
-    if args.verbose: print(f"Splitting '{filename}' into sections")
 
     def find_page(offset):
         l = len(page_map)
@@ -220,20 +293,34 @@ def split_text(page_map):
     if start + SECTION_OVERLAP < end:
         yield (all_text[start:end], find_page(start))
 
-def create_sections(filename, page_map):
+def create_sections_for_file(filename, page_map):
     for i, (section, pagenum) in enumerate(split_text(page_map)):
         yield {
             "id": re.sub("[^0-9a-zA-Z_-]","_",f"{filename}-{i}"),
             "content": section,
             "category": args.category,
             "sourcepage": blob_name_from_file_page(filename, pagenum),
-            "sourcefile": filename
+            "sourcefile": filename,
+        }
+
+def create_id_from_url(url):
+    return re.sub(".pdf", "", os.path.basename(url))
+
+def create_sections_for_webpage(url, page_map):
+    for i, (section, pagenum) in enumerate(split_text(page_map)):
+        yield {
+            "id": f"{create_id_from_url(url)}-{i}",
+            "content": section,
+            "category": args.category,
+            "sourcepage": blob_name_from_file_page(url, pagenum),
+            "sourcefile": url,
         }
 
 def create_search_index():
     if args.verbose: print(f"Ensuring search index {args.index} exists")
     index_client = SearchIndexClient(endpoint=f"https://{args.searchservice}.search.windows.net/",
                                      credential=search_creds)
+
     if args.index not in index_client.list_index_names():
         index = SearchIndex(
             name=args.index,
@@ -242,7 +329,7 @@ def create_search_index():
                 SearchableField(name="content", type="Edm.String", analyzer_name="en.microsoft"),
                 SimpleField(name="category", type="Edm.String", filterable=True, facetable=True),
                 SimpleField(name="sourcepage", type="Edm.String", filterable=True, facetable=True),
-                SimpleField(name="sourcefile", type="Edm.String", filterable=True, facetable=True)
+                SimpleField(name="sourcefile", type="Edm.String", filterable=True, facetable=True),
             ],
             semantic_settings=SemanticSettings(
                 configurations=[SemanticConfiguration(
@@ -310,6 +397,18 @@ else:
         else:
             if not args.skipblobs:
                 upload_blobs(filename)
-            page_map = get_document_text(filename)
-            sections = create_sections(os.path.basename(filename), page_map)
+            page_map = get_document_text_from_file(filename)
+            sections = create_sections_for_file(os.path.basename(filename), page_map)
             index_sections(os.path.basename(filename), sections)
+
+    # print("Processing urls...")
+    # for url in urls:
+    #     if args.verbose: print(f"Processing '{url}'")
+    #
+    #     if ".pdf" in url:
+    #         page_map = get_document_text_from_url(url)
+    #     else:
+    #         page_map = get_html_page_text(url)
+    #
+    #     sections = create_sections_for_webpage(url, page_map)
+    #     index_sections(os.path.basename(url), sections)

@@ -71,6 +71,9 @@ export const Answer = ({
                                 <a key={i} className={styles.citation} title={x} onClick={() => onCitationClicked(path)}>
                                     {`${++i}. ${x}`}
                                 </a>
+                                // <a key={i} className={styles.citation} title={x} href={`https://${x}`} target="_blank" rel="noopener noreferrer">
+                                //     {`${++i}. ${x}`}
+                                // </a>
                             );
                         })}
                     </Stack>

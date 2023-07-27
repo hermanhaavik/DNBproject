@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "CICD"
+    },
+    "location": {
+      "value": "westeurope"
+    },
+    "openAiServiceName": {
+      "value": "cog-platypus"
+    },
+    "openAiSkuName": {
+      "value": "S0"
+    },
+    "formRecognizerServiceName": {
+      "value": "cog-fr-platypus"
+    },
+    "formRecognizerSkuName": {
+      "value": "S0"
+    },
+    "searchServiceName": {
+      "value": "gptkb-platypus"
+    },
+    "searchServiceSkuName": {
+      "value": "standard"
+    },
+    "storageAccountName": {
+      "value": "stplatypus"
+    },
+    "chatGptDeploymentName": {
+      "value": "chat"
+    },
+    "gptDeploymentName": {  
+      "value": "gpt-35-turbo"
+    }
+  }
+}
