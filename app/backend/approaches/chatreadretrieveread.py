@@ -68,6 +68,7 @@ Search query:
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         print("Starting answering process")
         start_time = time.time()
+        max_time_limit = 8
 
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 3
@@ -77,24 +78,24 @@ Search query:
         step_time = time.time()
         print("Beginning step 1: Generate keyword search query")
 
-        # STEP 1: Generate an optimized keyword search query based on the chat history and the last question
         prompt = self.query_prompt_template.format(chat_history=self.get_chat_history_as_text(history, include_last_turn=False), question=history[-1]["user"])
-        completion = openai.Completion.create(
-            engine=self.gpt_deployment, 
-            prompt=prompt, 
-            temperature=0.0, 
-            max_tokens=32, 
-            n=1, 
-            stop=["\n"],
-            stream=True)
 
-        q = ''
-        for i, chunk in enumerate(completion):
-            print(f"Query chunk {i}: {chunk.choices[0].text}")
-            q += chunk.choices[0].text
-
-        print(f"Finished step 1 in {time.time() - step_time} seconds")
-
+        # STEP 1: Generate an optimized keyword search query based on the chat history and the last question
+        #Implement TImeout feature here as well
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(self.get_completion,prompt, overrides)
+            try:
+                var = time.time()
+                completion = future.result(timeout=max_time_limit)
+                print(f"Time for OpenAI to generate an improved Query {time.time() - var}")
+            
+            except TimeoutError:
+                #Custom response for when it takes to long
+                print(f"AMount of time before timeout: {time.time()- step_time} seconds.")
+                return {"data_points": "no results were created", "answer": "Took to long for OpenAI to generate a query, please try again:)", "thoughts": "Didnt manage search" + prompt.replace('\n', '<br>')}
+        
+        q = completion.choices[0].text
+   
         print("Beginning step 2: Retrieve document from search index")
         step_time = time.time()
 
@@ -133,39 +134,33 @@ Search query:
         else:
             prompt = prompt_override.format(sources=content, chat_history=self.get_chat_history_as_text(history), follow_up_questions_prompt=follow_up_questions_prompt)
 
-        max_time_limit = 4
+       
         print(f"Max time limit for question answering has been set to {max_time_limit} seconds")
 
 #Implementation of timeout in chat approach.
+# STEP 3: Generate a contextual and content specific answer using the search results and chat history, 
+     
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             print("Starting question answering thread")
             future = executor.submit(self.get_completion,prompt, overrides)
+            timer1 = time.time()
 
             try:
                 completion = future.result(timeout=max_time_limit)
             except TimeoutError:
-                print(f"Answer generation timed out... Took more than {max_time_limit} seconds")
-                return {"data_points": results, "answer": "Took to long for OpenAI to create answer, please try again:)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
-        # STEP 3: Generate a contextual and content specific answer using the search results and chat history, 
-     
-        """
-        completion = openai.Completion.create(
-            engine=self.chatgpt_deployment, 
-            prompt=prompt, 
-            temperature=overrides.get("temperature") or 0.7, 
-            max_tokens=1024, 
-            n=1, 
-            stop=["<|im_end|>", "<|im_start|>"],
-            stream=True)
-        """
-        
+            
+                print(f"Answer generation timed out... Took more than {max_time_limit} seconds, actual time waiting for response from OpenAI was {time.time()-timer1} seconds")
+                return {"data_points": results, "answer": "Took to long to find an answer, please try again:)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+       
+
         print(completion)
-        answer = ''
-        for i, chunk in enumerate(completion):
+        answer = completion.choices[0].text
+
+        """        for i, chunk in enumerate(completion):
             print(f"Answer chunk {i}: {chunk.choices[0].text}")
             answer += chunk.choices[0].text
-
+        """
         print(f"Finished step 3 in {time.time() - step_time} seconds")
 
         print(f"Answering process completed in {time.time() - start_time} seconds")
@@ -189,7 +184,6 @@ Search query:
             max_tokens=1024, 
             n=1, 
             stop=["<|im_end|>", "<|im_start|>"],
-            stream=True
             )
 
         
