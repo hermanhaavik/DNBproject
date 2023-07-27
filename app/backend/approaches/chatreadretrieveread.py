@@ -3,6 +3,7 @@ from approaches.approach import Approach
 from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from langchain.chat_models import AzureChatOpenAI
+from langchain.llms import AzureOpenAI
 from langchain.callbacks.manager import CallbackManager, Callbacks
 from langchain.agents import Tool, AgentType, initialize_agent, ConversationalChatAgent
 from langchain.memory import ConversationBufferMemory
@@ -190,14 +191,14 @@ New input:
             input_variables=["input", "agent_scratchpad", "memory"])
 
         print(prompt)
-        print(openai.api_version)
+        print(openai.api_key)
         llm = AzureChatOpenAI(deployment_name=self.chatgpt_deployment, 
                               temperature=overrides.get("temperature") or 0, 
                               openai_api_key=openai.api_key, 
                               openai_api_base=openai.api_base, 
-                              openai_api_version=openai.api_version)
+                              openai_api_version=openai.api_version
+                              )
         # print([llm(HumanMessage(content='How are you?'))])
-        print(openai.api_version)
         conversational_agent = initialize_agent(
             agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
             tools=tools, 
@@ -210,7 +211,7 @@ New input:
                                       return_messages = True)
             )
         result = conversational_agent.run(history[-1].get("user"))
-        # result = llm_chain.predict(q)        
+        
         # Remove references to tool names that might be confused with a citation
         result = result.replace("[CognitiveSearch]", "")
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
