@@ -1,6 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
-import re
 from typing import Any, Sequence
 
 import openai
@@ -10,7 +9,7 @@ from approaches.approach import Approach
 from text import nonewlines
 import time
 
-class ChatReadRetrieveReadApproach(Approach):
+class ChatRetrieveThenReadApproach(Approach):
     """
     Simple retrieve-then-read implementation, using the Cognitive Search and OpenAI APIs directly. It first retrieves
     top documents from search, then constructs a prompt with them, and then uses OpenAI to generate an completion
@@ -52,10 +51,10 @@ Question:
 Search query:
 """
 
-    def __init__(self, search_client: SearchClient, chatgpt_deployment: str, gpt_deployment: str, sourcepage_field: str, content_field: str):
+    def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
         self.chatgpt_deployment = chatgpt_deployment
-        self.gpt_deployment = gpt_deployment
+        # self.gpt_deployment = gpt_deployment
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
 
@@ -184,6 +183,20 @@ Search query:
             max_tokens=1024, 
             n=1, 
             stop=["<|im_end|>", "<|im_start|>"],
+            )
+
+        
+
+
+    def get_completion(self, prompt, overrides):
+        return openai.Completion.create(
+            engine=self.chatgpt_deployment, 
+            prompt=prompt, 
+            temperature=overrides.get("temperature") or 0.7, 
+            max_tokens=1024, 
+            n=1, 
+            stop=["<|im_end|>", "<|im_start|>"],
+            stream=True
             )
 
         
