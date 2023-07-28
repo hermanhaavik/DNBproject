@@ -24,35 +24,14 @@ class ChatReadRetrieveReadApproach(Approach):
     [1] E. Karpas, et al. arXiv:2205.00445
     """
     
-
-    template_prefix = \
-"You are an intelligent assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
-"If the question is incomplete, ask the user for more information. " \
-"If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
-"For information in table format return it as an html table. Do not return markdown format. " \
-"Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
-"For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
-"It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
-"If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
-"Never quote tool names or chat history as sources." \
-"Answer in the same language as the question was asked. " 
-
-    #TODO
-    # r = redis.Redis(
-    #     host='redis-11296.c56.east-us.azure.cloud.redislabs.com',
-    #     port=11296,
-    #     password='jcMkaxq3GLa6F8aiGNVVwlfxuTpdXlxQ')
-    # message_history = RedisChatMessageHistory(url="redis-11296.c56.east-us.azure.cloud.redislabs.com:11296", 
-    #                                           ttl = 600, 
-    #                                           session_id = "my_session")
-    
     memory = ConversationBufferMemory(memory_key = "chat_history", 
                                       input_key = "input",
                                       output_key = "output", 
                                       return_messages = True)
 
-    system_message = "You are an intelligent assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
+    system_message = "You are an intelligentm helpful assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
 "If the question is incomplete, ask the user for more information. " \
+"Only answer questions relevant to DNB house insurance. If the user asks about other insurance providers, say you don't know. " \
 "If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
 "For information in table format return it as an html table. Do not return markdown format. " \
 "Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
@@ -60,7 +39,6 @@ class ChatReadRetrieveReadApproach(Approach):
 "It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
 "If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
 "Never quote tool names or chat history as sources." \
-"Answer in the same language as the question was asked. " \
 
     
     human_message: str = """TOOLS
@@ -76,15 +54,6 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
 
 {input}"""
 
-    template_suffix = """
-Begin! 
-
-Previous conversation history:
-{memory}
-
-New input:
-{input}
-{agent_scratchpad}"""  
 
     format_instructions = """To use a tool, please use the following format:
 
@@ -102,31 +71,8 @@ New input:
     Answer: Your final answer. 
     """
 
-   
-#     query_prompt_template = """Below is a history of the conversation so far, and a new question asked by the user that needs to be answered by searching in a knowledge base about insurance.
-#     Generate a search query based on the conversation and the new question. 
-#     Do not include cited source filenames and document names e.g info.txt or doc.pdf in the search query terms.
-#     Do not include any text inside [] or <<>> in the search query terms.
-#     If the question is not in English, translate the question to English before generating the search query.
-
-# Chat History:
-# {chat_history}
-
-# Question:
-# {question}
-
-# Search Query:
-# """
-    human_prefix = \
-"For information in table format return it as an html table. Do not return markdown format. " \
-"Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
-"For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
-"It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
-"If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
-"Never quote tool names or chat history as sources." \
-"Answer in the same language as the question was asked. "
     
-    CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance car insurance, etc."
+    CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance."
 
     def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
@@ -188,24 +134,24 @@ New input:
             # format_instructions=self.format_instructions,
             # ai_prefix=self.ai_prefix,
             # human_prefix=self.human_prefix,
-            input_variables=["input", "agent_scratchpad", "memory"])
+            input_variables=["input", "agent_scratchpad", "chat_history"])
 
         print(prompt)
-        print(openai.api_key)
+
         llm = AzureChatOpenAI(deployment_name=self.chatgpt_deployment, 
                               temperature=overrides.get("temperature") or 0, 
                               openai_api_key=openai.api_key, 
                               openai_api_base=openai.api_base, 
                               openai_api_version=openai.api_version
                               )
-        # print([llm(HumanMessage(content='How are you?'))])
+
         conversational_agent = initialize_agent(
             agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
             tools=tools, 
             llm=llm,
             verbose=True,
             max_iterations=5,
-            memory= ConversationBufferMemory(memory_key = "chat_history", 
+            memory=ConversationBufferMemory(memory_key = "chat_history", 
                                       input_key = "input",
                                       output_key = "output", 
                                       return_messages = True)
@@ -215,11 +161,3 @@ New input:
         # Remove references to tool names that might be confused with a citation
         result = result.replace("[CognitiveSearch]", "")
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
-
-    def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
-        history_text = ""
-        for h in reversed(history if include_last_turn else history[:-1]):
-            history_text += """<|im_start|>user""" + "\n" + h["user"] + "\n" + """<|im_end|>""" + "\n" + """<|im_start|>assistant""" + "\n" + (h.get("bot", "") + """<|im_end|>""" if h.get("bot") else "") + "\n" + history_text
-            if len(history_text) > approx_max_tokens*4:
-                break
-        return history_text
