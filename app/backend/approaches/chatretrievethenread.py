@@ -57,6 +57,7 @@ Search query:
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
         self.executor = concurrent.futures.ThreadPoolExecutor()
+        self.query = ""
 
     def __source_url_from_doc(self, doc: dict[str, str]):
         # sourcepage = doc[self.sourcepage_field]
@@ -67,7 +68,7 @@ Search query:
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         print("Starting answering process")
         start_time = time.time()
-        max_time_limit = 8
+        max_time_limit = 30
 
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 3
@@ -77,9 +78,12 @@ Search query:
         step_time = time.time()
         print("Beginning step 1: Generate keyword search query")
 
+        self.query = history[-1]["user"]
+        print(self.query)
         prompt = self.query_prompt_template.format(chat_history=self.get_chat_history_as_text(history, include_last_turn=False), question=history[-1]["user"])
 
         # STEP 1: Generate an optimized keyword search query based on the chat history and the last question
+        
         future = self.executor.submit(self.get_completion, prompt, overrides)
         try:
             var = time.time()
@@ -148,8 +152,49 @@ Search query:
 
         print(f"Answering process completed in {time.time() - start_time} seconds")
 
-        return {"data_points": results, "answer": answer, "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+        
     
+        # STEP 4: Ask GPT if its pleased with its answer
+        print("Asking GPT if its pleased with its answer")
+        new_prompt_for_confirmation_template = """Is the following Answer good given the question?
+       
+
+        
+
+        Here is the question asked: {question}
+
+        Here is the answer: {answer_for_check}
+        
+        """
+        new_prompt = new_prompt_for_confirmation_template.format( question=self.query, answer_for_check=answer)
+        
+        print(new_prompt)
+    
+        future = self.executor.submit(self.get_completion, new_prompt, overrides )
+        timer1 = time.time()
+        try:
+            completion = future.result(timeout=max_time_limit)
+        except TimeoutError:
+            print(f"Couldnt verify answer, actual time waiting for response from OpenAI was {time.time()-timer1} seconds")
+            return {"data_points": results, "answer": "Couldnt verify answer)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
+        
+
+        print("SNART HELG :)")
+        print(completion.choices[0].text)
+
+
+        print(f"Finished step 3 in {time.time() - step_time} seconds")
+
+        print(f"Answering process completed in {time.time() - start_time} seconds")
+
+
+
+        # ----------------------------------------------   STEP 4 FINISHED   ----------------------------------------------
+
+
+
+
+        return {"data_points": results, "answer": answer, "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
     def get_chat_history_as_text(self, history: Sequence[dict[str, str]], include_last_turn: bool=True, approx_max_tokens: int=1000) -> str:
         history_text = ""
         for h in reversed(history if include_last_turn else history[:-1]):
