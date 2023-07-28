@@ -54,9 +54,9 @@ Search query:
     def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
         self.chatgpt_deployment = chatgpt_deployment
-        # self.gpt_deployment = gpt_deployment
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
+        self.executor = concurrent.futures.ThreadPoolExecutor()
 
     def __source_url_from_doc(self, doc: dict[str, str]):
         # sourcepage = doc[self.sourcepage_field]
@@ -80,18 +80,15 @@ Search query:
         prompt = self.query_prompt_template.format(chat_history=self.get_chat_history_as_text(history, include_last_turn=False), question=history[-1]["user"])
 
         # STEP 1: Generate an optimized keyword search query based on the chat history and the last question
-        #Implement TImeout feature here as well
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(self.get_completion,prompt, overrides)
-            try:
-                var = time.time()
-                completion = future.result(timeout=max_time_limit)
-                print(f"Time for OpenAI to generate an improved Query {time.time() - var}")
-            
-            except TimeoutError:
-                #Custom response for when it takes to long
-                print(f"AMount of time before timeout: {time.time()- step_time} seconds.")
-                return {"data_points": "no results were created", "answer": "Took to long for OpenAI to generate a query, please try again:)", "thoughts": "Didnt manage search" + prompt.replace('\n', '<br>')}
+        future = self.executor.submit(self.get_completion, prompt, overrides)
+        try:
+            var = time.time()
+            completion = future.result(timeout=max_time_limit)
+            print(f"Time for OpenAI to generate an improved Query {time.time() - var}")
+        except concurrent.futures.TimeoutError:
+            # Custom response for when it takes to long
+            print(f"Amount of time before timeout: {time.time()- step_time} seconds.")
+            return {"data_points": "no results were created", "answer": "Took to long for OpenAI to generate a query, please try again:)", "thoughts": "Didnt manage search"}
         
         q = completion.choices[0].text
    
@@ -133,33 +130,20 @@ Search query:
         else:
             prompt = prompt_override.format(sources=content, chat_history=self.get_chat_history_as_text(history), follow_up_questions_prompt=follow_up_questions_prompt)
 
-       
         print(f"Max time limit for question answering has been set to {max_time_limit} seconds")
 
-#Implementation of timeout in chat approach.
-# STEP 3: Generate a contextual and content specific answer using the search results and chat history, 
-     
+        # STEP 3: Generate a contextual and content specific answer using the search results and chat history, 
+        print("Starting question answering thread")
+        future = self.executor.submit(self.get_completion,prompt, overrides)
+        timer1 = time.time()
+        try:
+            completion = future.result(timeout=max_time_limit)
+        except TimeoutError:
+            print(f"Answer generation timed out... Took more than {max_time_limit} seconds, actual time waiting for response from OpenAI was {time.time()-timer1} seconds")
+            return {"data_points": results, "answer": "Took to long to find an answer, please try again:)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            print("Starting question answering thread")
-            future = executor.submit(self.get_completion,prompt, overrides)
-            timer1 = time.time()
-
-            try:
-                completion = future.result(timeout=max_time_limit)
-            except TimeoutError:
-            
-                print(f"Answer generation timed out... Took more than {max_time_limit} seconds, actual time waiting for response from OpenAI was {time.time()-timer1} seconds")
-                return {"data_points": results, "answer": "Took to long to find an answer, please try again:)", "thoughts": f"Searched for:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}
-       
-
-        print(completion)
         answer = completion.choices[0].text
 
-        """        for i, chunk in enumerate(completion):
-            print(f"Answer chunk {i}: {chunk.choices[0].text}")
-            answer += chunk.choices[0].text
-        """
         print(f"Finished step 3 in {time.time() - step_time} seconds")
 
         print(f"Answering process completed in {time.time() - start_time} seconds")
@@ -174,29 +158,12 @@ Search query:
                 break    
         return history_text
 
-
     def get_completion(self, prompt, overrides):
         return openai.Completion.create(
             engine=self.chatgpt_deployment, 
             prompt=prompt, 
-            temperature=overrides.get("temperature") or 0.7, 
+            temperature=overrides.get("temperature") or 0, 
             max_tokens=1024, 
             n=1, 
-            stop=["<|im_end|>", "<|im_start|>"],
+            stop=["<|im_end|>", "<|im_start|>"]
             )
-
-        
-
-
-    def get_completion(self, prompt, overrides):
-        return openai.Completion.create(
-            engine=self.chatgpt_deployment, 
-            prompt=prompt, 
-            temperature=overrides.get("temperature") or 0.7, 
-            max_tokens=1024, 
-            n=1, 
-            stop=["<|im_end|>", "<|im_start|>"],
-            stream=True
-            )
-
-        
