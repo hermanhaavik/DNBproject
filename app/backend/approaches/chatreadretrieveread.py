@@ -11,6 +11,8 @@ from langchain.schema import HumanMessage
 from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
 from typing import Any, Sequence
+# from messagebuilder import MessageBuilder
+
 
 class ChatReadRetrieveReadApproach(Approach):
     """
@@ -23,13 +25,13 @@ class ChatReadRetrieveReadApproach(Approach):
 
     [1] E. Karpas, et al. arXiv:2205.00445
     """
-    
+    content: str = ""
     memory = ConversationBufferMemory(memory_key = "chat_history", 
                                       input_key = "input",
                                       output_key = "output", 
                                       return_messages = True)
 
-    system_message = "You are an intelligentm helpful assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
+    system_message = "You are an intelligent and helpful assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
 "If the question is incomplete, ask the user for more information. " \
 "Only answer questions relevant to DNB house insurance. If the user asks about other insurance providers, say you don't know. " \
 "If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
@@ -43,10 +45,13 @@ class ChatReadRetrieveReadApproach(Approach):
     
     human_message: str = """TOOLS
 ------
-Assistant can ask the user to use tools to look up information that may be helpful in answering the users original question. The tools the human can use are:
+You can use tools to look up information that may be helpful in answering the users question. The tools you can use are:
 
 {tools}
 {format_instructions}
+
+Only use information from the sources below. If you need to use information from another source, tell the user you don't know.
+{sources}
 
 USER'S INPUT
 --------------------
@@ -70,7 +75,6 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
     Thought: Do I need to use a tool? No
     Answer: Your final answer. 
     """
-
     
     CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance."
 
@@ -124,10 +128,11 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
         #                 description="Useful for asking the user for more information if the question is incomplete.",
         #                 callbacks=cb_manager)
         tools: Sequence = [acs_tool]
+        print(self.content, "Hei")
 
         prompt = ConversationalChatAgent.create_prompt(
             system_message=self.system_message,
-            human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), input=self.memory),
+            human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=self.memory),
             tools=tools,
             # prefix=overrides.get("prompt_template_prefix") or self.template_prefix,
             # suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
@@ -139,7 +144,7 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
         print(prompt)
 
         llm = AzureChatOpenAI(deployment_name=self.chatgpt_deployment, 
-                              temperature=overrides.get("temperature") or 0, 
+                              temperature=0, 
                               openai_api_key=openai.api_key, 
                               openai_api_base=openai.api_base, 
                               openai_api_version=openai.api_version
@@ -161,3 +166,25 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
         # Remove references to tool names that might be confused with a citation
         result = result.replace("[CognitiveSearch]", "")
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
+    
+    # def get_messages_from_history(self, system_prompt: str, model_id: str, history: Sequence[dict[str, str]], user_conv: str, few_shots = [], max_tokens: int = 4096) -> Sequence[dict[str, str]]:
+    #     message_builder = MessageBuilder(system_prompt, model_id)
+
+    #     # Add examples to show the chat what responses we want. It will try to mimic any responses and make sure they match the rules laid out in the system message.
+    #     for shot in few_shots:
+    #         message_builder.append_message(shot.get('role'), shot.get('content'))
+
+    #     user_content = user_conv
+    #     append_index = len(few_shots) + 1
+
+    #     message_builder.append_message(self.USER, user_content, index=append_index)
+
+    #     for h in reversed(history[:-1]):
+    #         if h.get("bot"):
+    #             message_builder.append_message(self.ASSISTANT, h.get('bot'), index=append_index)
+    #         message_builder.append_message(self.USER, h.get('user'), index=append_index)
+    #         if message_builder.token_length > max_tokens:
+    #             break
+        h
+    #     messages = message_builder.messages
+    #     return messages
