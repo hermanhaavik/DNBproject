@@ -188,12 +188,12 @@ History:
         for shot in few_shot:
             messages.append({"role": self.SYSTEM, "name": f"example_{shot.get('role')}", "content": shot.get("content")})
 
-        messages.append({"role": self.USER, "content": user_question})
-
         if len(history) > 0:
             for interaction in history[:-1]:
                 for role, content in interaction.items():
                     messages.append({"role": role, "content": content})
+
+        messages.append({"role": self.USER, "content": user_question})
 
         print(messages)
 
