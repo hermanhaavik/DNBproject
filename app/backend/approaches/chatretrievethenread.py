@@ -68,7 +68,7 @@ Search query:
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         print("Starting answering process")
         start_time = time.time()
-        max_time_limit = 30
+        max_time_limit = 60
 
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 3
@@ -156,19 +156,33 @@ Search query:
     
         # STEP 4: Ask GPT if its pleased with its answer
         print("Asking GPT if its pleased with its answer")
-        new_prompt_for_confirmation_template = """Is the following Answer good given the question?
-       
+        new_prompt_for_confirmation_template = """You are a personal assistant that are supposed to evaluate answers. You will be given the following: some background information which was the source used to write the answer, the question and the answer itself. 
+        Your job is to evaluate the answer with a score from 1 to 10, where 10 is scored to answers which are perfect considering the question and 1 is when the answers is wrong or inadequate. 
+    
+        Example:
+                Background information: House insurance includes the exterior of the home, the actual building and its fixtures and fittings. Damage to homes and buildings can quickly become expensive. House insurance is therefore important to provide financial security if something were to happen.
+                Question: What is house insurance?
+                Answer: House insurance is insurance of your house, it coverss the actual builing, its fixtures and its fittings. Damages to homes can become expensive so house insurance is smart!
+                Score: 7
+        
+        Example finished
+        As you can see in the example you shall only respond with a number between 1 and 10, not any text. Your respons should look like this: "Score: 'given score'"
+        You shall NOT answer with code, only with a single number
+
+        Here is what you are going to evaluate:
+
+        Background information: {content}
+        Question: {question}
+        Answer: {answer_for_check}
+
 
         
 
-        Here is the question asked: {question}
-
-        Here is the answer: {answer_for_check}
+      
         
         """
-        new_prompt = new_prompt_for_confirmation_template.format( question=self.query, answer_for_check=answer)
+        new_prompt = new_prompt_for_confirmation_template.format(content=content, question=self.query, answer_for_check=answer)
         
-        print(new_prompt)
     
         future = self.executor.submit(self.get_completion, new_prompt, overrides )
         timer1 = time.time()
