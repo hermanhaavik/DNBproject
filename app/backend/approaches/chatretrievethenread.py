@@ -33,12 +33,15 @@ It is very very important that you only answer questions that are DNB related or
 {sources}
 """
 
-    query_prompt = """Below is a history of the conversation so far, and a new question asked by the user that needs to be answered by searching in a knowledge base about DNB house insurance.
+    query_prompt = """Below is a history of the conversation so far, and a new question asked by the user that needs to be answered by searching in a knowledge base about DNB insurance.
 Generate a search query based on the conversation and the new question. 
 Do not include cited source filenames and document names e.g info.txt or doc.pdf in the search query terms.
 Do not include any text inside [] or <<>> in the search query terms.
 Do not include any special characters like '+'.
 If the question is not in English, translate the question to English before generating the search query.
+
+History:
+{history}
 """
 
     query_prompt_few_shots = [
@@ -107,7 +110,8 @@ If the question is not in English, translate the question to English before gene
 
     def generate_keyword_query(self, history, overrides, timeout):
         user_question = f"Generate search query for: {history[-1][self.USER]}"
-        messages = self.format_chat_messages(system_prompt=self.query_prompt, history=history, user_question=user_question)
+        prompt = self.query_prompt.format(history=self.history_as_text(history[:-1]))
+        messages = self.format_chat_messages(system_prompt=prompt, history=[], user_question=user_question, few_shot=self.query_prompt_few_shots)
         future = self.executor.submit(self.get_completion, messages, overrides)
         try:
             completion = future.result(timeout=timeout)
@@ -182,12 +186,23 @@ If the question is not in English, translate the question to English before gene
         messages = [{"role": self.SYSTEM, "content": system_prompt}]
 
         for shot in few_shot:
-            messages.append(shot)
+            messages.append({"role": self.SYSTEM, "name": f"example_{shot.get('role')}", "content": shot.get("content")})
 
         messages.append({"role": self.USER, "content": user_question})
 
-        for interaction in history[:-1]:
-            for role, content in interaction.items():
-                messages.append({"role": role, "content": content})
+        if len(history) > 0:
+            for interaction in history[:-1]:
+                for role, content in interaction.items():
+                    messages.append({"role": role, "content": content})
+
+        print(messages)
 
         return messages
+
+    def history_as_text(self, history):
+        text = "" 
+        for interaction in history:
+            for role, content in interaction.items():
+                text = "\n".join([text, f"{role}: {content}"])
+
+        return text
