@@ -46,9 +46,9 @@ const Chat = () => {
         setActiveAnalysisPanelTab(undefined);
 
         try {
-            const history: ChatTurn[] = answers.map(a => ({ user: a[0], bot: a[1].answer }));
+            const history: ChatTurn[] = answers.map(a => ({ user: a[0], assistant: a[1].answer }));
             const request: ChatRequest = {
-                history: [...history, { user: question, bot: undefined }],
+                history: [...history, { user: question, assistant: undefined }],
                 approach,
                 overrides: {
                     promptTemplate: promptTemplate.length === 0 ? undefined : promptTemplate,
