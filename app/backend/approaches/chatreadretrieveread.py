@@ -16,7 +16,8 @@ class ChatReadRetrieveReadApproach(Approach):
     """
 
     prompt_prefix = """<|im_start|>system
-Assistant helps the customers of DNB bank with their questions about insurance. Be brief in your answers. Only answer questions about DNB insurance. If you get questions about other insurance providers, tell a joke about insurance. 
+
+Match the language the customer uses.Assistant helps the customers of DNB bank with their questions things in the {sources}. If you get questions about other insurance providers, tell a joke about insurance. 
 Answer ONLY with the facts listed in the list of sources below. If there isn't enough information below, say you don't know. Do not generate answers that don't use the sources below. If asking a clarifying question to the user would help, ask the question.
 For tabular information return it as an html table. Do not return markdown format.
 Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
@@ -108,9 +109,9 @@ Search query:
             r = self.search_client.search(q, filter=filter, top=top)
 
         if use_semantic_captions:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r if doc["@search.score"] >= 1]
         else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r if doc["@search.score"] >= 1]
         content = "\n".join(results)
 
         print(f"Finished step 2 in {time.time() - step_time} seconds")

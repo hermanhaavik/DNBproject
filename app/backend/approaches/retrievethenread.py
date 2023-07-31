@@ -6,6 +6,8 @@ from text import nonewlines
 from typing import Any
 
 
+
+
 class RetrieveThenReadApproach(Approach):
     """
     Simple retrieve-then-read implementation, using the Cognitive Search and OpenAI APIs directly. It first retrieves
@@ -14,6 +16,8 @@ class RetrieveThenReadApproach(Approach):
     """
 
     template = \
+    "You can speak a varied range of language, especially Norwegian " +\
+"Use the language the customer uses in your answer even tho you dont know the answer." +\
 "You are an intelligent assistant named Floyd, like the boxer, helping DNB Bank ASA customers with their questions about insurance. " + \
 "When someone interacts with you, they are interacting with DNB" + \
 "Use 'you' to refer to the individual asking the questions even if they ask with 'I'. " + \
@@ -21,7 +25,6 @@ class RetrieveThenReadApproach(Approach):
 "For tabular information return it as an html table. Do not return markdown format. "  + \
 "Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. " + \
 "Remember to include the source name for each fact you use in the response." + \
-"Dont repeat yourself, if you have stated something earlier in the answer dont say it again." + \
 "If you cannot answer using the sources below, say you don't know, and tell them to reach out to customer support. " + \
 """
 
@@ -69,18 +72,19 @@ Answer:
         else:
             r = self.search_client.search(q, filter=filter, top=top)
         if use_semantic_captions:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r if doc["@search.score"] >= 1]
         else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r if doc["@search.score"] >= 1]
         content = "\n".join(results)
 
         prompt = (overrides.get("prompt_template") or self.template).format(q=q, retrieved=content)
         completion = openai.Completion.create(
             engine=self.openai_deployment, 
             prompt=prompt, 
-            temperature=overrides.get("temperature") or 0.3, 
+            temperature=overrides.get("temperature") or 0, 
             max_tokens=1024, 
             n=1, 
+
             stop=["\n"])
 
         return {"data_points": results, "answer": completion.choices[0].text, "thoughts": f"Question:<br>{q}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')}

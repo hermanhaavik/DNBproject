@@ -24,6 +24,7 @@ class ReadRetrieveReadApproach(Approach):
     """
 
     template_prefix = \
+"Use the same language the customer uses and you can speak Norwegian " \
 "You are an intelligent assistant helping DNB Bank AS customers with their questions about insurance." \
 "For tabular information return it as an html table. Do not return markdown format. " \
 "Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
@@ -67,9 +68,9 @@ Thought: {agent_scratchpad}"""
         else:
             r = self.search_client.search(q, filter=filter, top=top)
         if use_semantic_captions:
-            self.results = [doc[self.sourcepage_field] + ":" + nonewlines(" -.- ".join([c.text for c in doc['@search.captions']])) for doc in r]
+            self.results = [doc[self.sourcepage_field] + ":" + nonewlines(" -.- ".join([c.text for c in doc['@search.captions']])) for doc in r if doc["@search.score"] >= 1]
         else:
-            self.results = [doc[self.sourcepage_field] + ":" + nonewlines(doc[self.content_field][:250]) for doc in r]
+            self.results = [doc[self.sourcepage_field] + ":" + nonewlines(doc[self.content_field][:250]) for doc in r if doc["@search.score"] >= 1]
         content = "\n".join(self.results)
         return content
         
