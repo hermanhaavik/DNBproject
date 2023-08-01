@@ -1,3 +1,5 @@
+import time
+import re
 import concurrent.futures
 from typing import Any, Sequence
 
@@ -6,7 +8,6 @@ from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from approaches.approach import Approach
 from text import nonewlines
-import time
 
 class ChatRetrieveThenReadApproach(Approach):
     """
@@ -90,9 +91,9 @@ History:
         print("Beginning step 2: Retrieve documents from search index")
 
         step_time = time.time()
-        search_result = self.retrieve_documents(search_query, top, filter, use_semantic_captions, overrides)
-
-        sources = len(search_result) and "\n".join(search_result) or "No sources found"
+        documents = self.retrieve_documents(search_query, top, filter, use_semantic_captions, overrides)
+        source_list = self.documents_to_sources(documents, use_semantic_captions)
+        sources = len(source_list) and "\n".join(source_list) or "No sources found"
 
         print(f"Finished step 2 in {time.time() - step_time} seconds")
         print("Beginning step 3: Generate question answer")
@@ -100,14 +101,20 @@ History:
         step_time = time.time()
         prompt = self.format_assistant_prompt(sources, overrides)
         answer = self.generate_question_answer(history, sources, overrides, chatgpt_timeout)
+
         if answer == None:
+            print("WARNING: Timeout before generating question answer")
             answer = "Could not answer question, please try again."
+
+        if not self.check_answer_sources(answer, documents):
+            print("WARNING: Generated question answer used sources incorrectly")
+            answer = "Sorry, I do not have information related to your question."
 
         print(f"Finished step 3 in {time.time() - step_time} seconds")
         print(f"Answering process completed in {time.time() - start_time} seconds")
 
         thoughts = f"Searched for:<br>{search_query}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')
-        return {"data_points": search_result, "answer": answer, "thoughts": thoughts}
+        return {"data_points": source_list, "answer": answer, "thoughts": thoughts}
 
     def generate_keyword_query(self, history, overrides, timeout):
         user_question = f"Generate search query for: {history[-1][self.USER]}"
@@ -134,21 +141,38 @@ History:
         else:
             r = self.search_client.search(query, filter=filter, top=top)
 
-        # Convert to list to iterate over multiple times
-        r = list(r)
-        if use_semantic_captions:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r if doc["@search.score"] >= self.DOCUMENT_SCORE_CUTOFF]
-        else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r if doc["@search.score"] >= self.DOCUMENT_SCORE_CUTOFF]
-
+        documents = []
         for doc in r:
             score = doc["@search.score"]
             if score < self.DOCUMENT_SCORE_CUTOFF:
                 print(f"Removed doc {doc[self.sourcepage_field]} with score {score}")
             else:
                 print(f"Kept doc {doc[self.sourcepage_field]} with score {score}")
+                documents.append(doc)
         
+        return documents
+
+    def documents_to_sources(self, documents, use_semantic_captions):
+        if use_semantic_captions:
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in documents]
+        else:
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in documents]
+
         return results
+
+    def check_answer_sources(self, answer, documents):
+        answer_sources = re.findall(r"\[([^]]+)\]", answer)
+        document_names = [doc[self.sourcepage_field] for doc in documents]
+
+        print("Answer sources: ", answer_sources)
+        print("Document names: ", document_names)
+
+        for source in answer_sources:
+            if source not in document_names:
+                print(f"Tried to use incorrect source {source} in answer")
+                return False
+
+        return True
 
     def format_assistant_prompt(self, sources, overrides):
         follow_up_questions_prompt = self.follow_up_questions_prompt_content if overrides.get("suggest_followup_questions") else ""
