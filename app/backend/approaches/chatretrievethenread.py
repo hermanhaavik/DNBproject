@@ -2,6 +2,7 @@ import concurrent.futures
 from typing import Any, Sequence
 
 import openai
+import openai.error
 from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from approaches.approach import Approach
@@ -20,6 +21,10 @@ class ChatRetrieveThenReadApproach(Approach):
     ASSISTANT = "assistant"
 
     DOCUMENT_SCORE_CUTOFF = 1.0
+
+    CHATGPT_TIMEOUT = 600
+    CHATGPT_RETRY_WAIT = 1
+    CHATGPT_MAX_RETRIES = 3
 
 
     assistant_prompt = """
@@ -65,10 +70,9 @@ History:
 
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         start_time = time.time()
-        chatgpt_timeout = 600
 
         print("Starting answering process")
-        print(f"Max time limit for chatGPT has been set to {chatgpt_timeout} seconds")
+        print(f"Max time limit for chatGPT has been set to {self.CHATGPT_TIMEOUT} seconds")
 
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 6
@@ -78,7 +82,7 @@ History:
         print("Beginning step 1: Generate keyword search query")
 
         step_time = time.time()
-        search_query = self.generate_keyword_query(history, overrides, chatgpt_timeout)
+        search_query = self.generate_keyword_query(history, overrides, self.CHATGPT_TIMEOUT)
 
         print(f"Finished step 1 in {time.time() - step_time} seconds")
 
@@ -99,7 +103,7 @@ History:
 
         step_time = time.time()
         prompt = self.format_assistant_prompt(sources, overrides)
-        answer = self.generate_question_answer(history, sources, overrides, chatgpt_timeout)
+        answer = self.generate_question_answer(history, sources, overrides, self.CHATGPT_TIMEOUT)
         if answer == None:
             answer = "Could not answer question, please try again."
 
@@ -180,18 +184,40 @@ History:
         future = self.executor.submit(self.get_completion, messages, overrides)
         try:
             completion = future.result(timeout=timeout)
-            return completion.choices[0].message.content
+            if completion:
+                return completion.choices[0].message.content
+            return None
         except concurrent.futures.TimeoutError:
             return None
     
     def get_completion(self, messages, overrides):
-        return openai.ChatCompletion.create(
-            engine=self.chatgpt_deployment,
-            messages=messages,
-            temperature=overrides.get("temperature") or 0, 
-            max_tokens=1024, 
-            n=1, 
-        )
+        retries = 0
+        while retries <= self.CHATGPT_MAX_RETRIES:
+            if retries > 0:
+                print(f"Completion failed. Retry number {retries}")
+
+                # Wait a bit before retrying
+                time.sleep(self.CHATGPT_RETRY_WAIT)
+
+            try:
+                completion = openai.ChatCompletion.create(
+                engine=self.chatgpt_deployment,
+                messages=messages,
+                temperature=overrides.get("temperature") or 0,
+                max_tokens=1024,
+                n=1,
+                )
+
+                return completion
+            except openai.error.Timeout as e:
+                print(f"OpenAI API request timed out: {e}")
+            except openai.error.APIError as e:
+                print(f"OpenAI API returned an API Error: {e}")
+
+            retries += 1
+
+        return None
+
 
     def format_chat_messages(self, system_prompt: str, history: Sequence[dict[str, str]], user_question: str, few_shot: Sequence[dict[str, str]] = []):
         messages = [{"role": self.SYSTEM, "content": system_prompt}]
