@@ -51,16 +51,6 @@ lint:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_COMMIT_BRANCH == 'main'
 
-
-safety_scan:
-  stage: CI 
-  image: python:latest 
-  script:
-    - pip install safety
-    - cd ./app/backend/
-    - pip install -r requirements.txt
-    - safety check  
-
 validate-infra: 
   stage: CI
   image: 364737385840.dkr.ecr.eu-west-1.amazonaws.com/tools-azure-cli-python:1.0
@@ -83,10 +73,21 @@ deploy:
     - apt install npm -y
     - curl -fsSL https://aka.ms/install-azd.sh | bash
     - azd auth login --client-id $AZURE_DEPLOY_CLIENT_ID --tenant-id $DNB_AZURE_TENANT_ID --client-secret $AZURE_DEPLOY_CLIENT_SECRET
+    # - az login --service-principal -u $AZURE_DEPLOY_CLIENT_ID -p $AZURE_DEPLOY_CLIENT_SECRET --tenant $DNB_AZURE_TENANT_ID
     - source infra/platypus-dev.env
-    - azd env platypus -l westeurope --subscription 564df8bf-50ab-4917-8082-b363158428c2
+    - azd env select platypus -l westeurope --subscription 564df8bf-50ab-4917-8082-b363158428c2
     - azd up -e platypus --no-prompt  
   rules:
     - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
 
 
+
+
+safety_scan:
+  stage: CD 
+  image: python:latest 
+  script:
+    - pip install safety
+    - cd ./app/backend/
+    - pip install -r requirements.txt
+    - safety check  
