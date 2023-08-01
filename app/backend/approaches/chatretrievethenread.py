@@ -19,6 +19,8 @@ class ChatRetrieveThenReadApproach(Approach):
     USER = "user"
     ASSISTANT = "assistant"
 
+    DOCUMENT_SCORE_CUTOFF = 1.0
+
 
     assistant_prompt = """
 You are an insurance customer assistant representing DNB bank. Be brief in your answers. If the user asks something unrelated to DNB insurance, say that you can't answer that.
@@ -89,7 +91,8 @@ History:
 
         step_time = time.time()
         search_result = self.retrieve_documents(search_query, top, filter, use_semantic_captions, overrides)
-        sources = "\n".join(search_result)
+
+        sources = len(search_result) and "\n".join(search_result) or "No sources found"
 
         print(f"Finished step 2 in {time.time() - step_time} seconds")
         print("Beginning step 3: Generate question answer")
@@ -127,14 +130,24 @@ History:
                                           semantic_configuration_name="default", 
                                           top=top,
                                           query_caption="extractive|highlight-false" if use_semantic_captions else None)
+        
         else:
             r = self.search_client.search(query, filter=filter, top=top)
 
+        # Convert to list to iterate over multiple times
+        r = list(r)
         if use_semantic_captions:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in r if doc["@search.score"] >= self.DOCUMENT_SCORE_CUTOFF]
         else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r]
+            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in r if doc["@search.score"] >= self.DOCUMENT_SCORE_CUTOFF]
 
+        for doc in r:
+            score = doc["@search.score"]
+            if score < self.DOCUMENT_SCORE_CUTOFF:
+                print(f"Removed doc {doc[self.sourcepage_field]} with score {score}")
+            else:
+                print(f"Kept doc {doc[self.sourcepage_field]} with score {score}")
+        
         return results
 
     def format_assistant_prompt(self, sources, overrides):
@@ -193,7 +206,6 @@ History:
 
         messages.append({"role": self.USER, "content": user_question})
 
-        print(messages)
 
         return messages
 
