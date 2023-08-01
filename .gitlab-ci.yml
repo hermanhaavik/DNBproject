@@ -85,9 +85,9 @@ deploy:
     - curl -fsSL https://aka.ms/install-azd.sh | bash
     - azd auth login --client-id $AZURE_DEPLOY_CLIENT_ID --tenant-id $DNB_AZURE_TENANT_ID --client-secret $AZURE_DEPLOY_CLIENT_SECRET
     # - az login --service-principal -u $AZURE_DEPLOY_CLIENT_ID -p $AZURE_DEPLOY_CLIENT_SECRET --tenant $DNB_AZURE_TENANT_ID
-    - source infra/platypus-dev.env
-    - azd env select platypus --no-prompt  
-    - azd up -e platypus --no-prompt  
+    - source .azure/platypus/.env
+    - azd env select .env --no-prompt  
+    - azd up -e .env --no-prompt  
   # rules:
   #   - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
 
