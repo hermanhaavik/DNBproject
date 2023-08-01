@@ -51,6 +51,16 @@ lint:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_COMMIT_BRANCH == 'main'
 
+
+safety_scan:
+  stage: CI 
+  image: python:latest 
+  script:
+    - pip install safety
+    - cd ./app/backend/
+    - pip install -r requirements.txt
+    - safety check  
+
 validate-infra: 
   stage: CI
   image: 364737385840.dkr.ecr.eu-west-1.amazonaws.com/tools-azure-cli-python:1.0
@@ -80,13 +90,3 @@ deploy:
     - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
 
 
-
-
-safety_scan:
-  stage: CD 
-  image: python:latest 
-  script:
-    - pip install safety
-    - cd ./app/backend/
-    - pip install -r requirements.txt
-    - safety check  
