@@ -51,8 +51,8 @@ History:
         {'role' : ASSISTANT, 'content' : 'standard house insurance coverage' }
     ]
 
-    follow_up_questions_prompt_content = """Generate three very brief follow-up questions that the user would likely ask next about their insurance. 
-    Use double angle brackets to reference the questions, e.g. <<Are there exclusions for prescriptions?>>.
+    follow_up_questions_prompt_content = """After giving your answer, generate three very brief follow-up questions that the user would likely ask next about their insurance.
+    Use double angle brackets to reference the questions, e.g. <<What is the cheapest alternative?>>.
     Try not to repeat questions that have already been asked.
     Only generate questions and do not generate any text before or after the questions, such as 'Next Questions'"""
 
@@ -205,7 +205,6 @@ History:
                     messages.append({"role": role, "content": content})
 
         messages.append({"role": self.USER, "content": user_question})
-
 
         return messages
 
