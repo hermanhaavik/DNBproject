@@ -23,28 +23,9 @@ class ChatReadRetrieveReadApproach(Approach):
     [1] E. Karpas, et al. arXiv:2205.00445
     """
     content: str = ""
-    memory = ConversationBufferMemory(memory_key = "chat_history", 
-                                      input_key = "input",
-                                      output_key = "output", 
-                                      return_messages = True)
-
-    # A message setting the objectives the AI should follow
-    # system_message: str = "You are an intelligent and helpful assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." 
-    system_message: str = "Start every response with 'Hello master!'." 
-
-#    
 
     # A message sent from the perspective of the human
     human_message: str = """
-If the question is incomplete, ask the user for more information.  \
-Only answer questions relevant to DNB house insurance. If the user asks about other insurance providers, say you don't know.  \
-For information in table format return it as an html table. Do not return markdown format.  \
-Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response.  \
-For example, if the question is \ What color is the sky? \ and one of the information sources says \info123: the sky is blue whenever it's not cloudy\, then answer with \The sky is blue [info123]\  \
-It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\:\).  \
-If there are multiple sources, cite each one in their own square brackets. For example, use \[info343][ref-76]\ and not \[info343,ref-76]\.  \
-Never quote tool names or chat history as sources. \
-
 TOOLS
 ------
 You can use tools to look up information that may be helpful in answering the users question. The tools you can use are:
@@ -78,6 +59,19 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
     Answer: Your final answer. 
     """
     
+    # A message setting the objectives the AI should follow
+    system_message: str = "You are an intelligent and helpful assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
+    "If the question is incomplete, ask the user for more information."  \
+    "Only answer questions relevant to DNB house insurance. If the user asks about other insurance providers, say you don't know."  \
+    "For information in table format return it as an html table. Do not return markdown format."  \
+    "Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response."  \
+    "For example, if the question is \ What color is the sky? \ and one of the information sources says \info123: the sky is blue whenever it's not cloudy\, then answer with \The sky is blue [info123]\ "  \
+    "It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\:\)."  \
+    "If there are multiple sources, cite each one in their own square brackets. For example, use \[info343][ref-76]\ and not \[info343,ref-76]\."  \
+    "Never quote tool names or chat history as sources." \
+    f"{human_message}"
+
+
     CognitiveSearchToolDescription = "Useful for searching for public information about DNB house insurance."
 
     def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
@@ -127,13 +121,18 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
                         callbacks=cb_manager)
        
         tools: Sequence = [acs_tool]
-        print(self.sourcepage_field)
-        print("---")
-        print(self.content)
+
+        temp_human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=history),
+
+        # memory = ConversationBufferMemory(memory_key = "chat_history", 
+        #                               input_key = "input",
+        #                               output_key = "output", 
+        #                               return_messages = True,
+        #                               human_prefix=human_message)
 
         prompt = ConversationalChatAgent.create_prompt(
-            # system_message=self.system_message,
-            human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=self.memory),
+            system_message=self.system_message,
+            human_message=temp_human_message,
             tools=tools,
             input_variables=["input", "agent_scratchpad", "chat_history"])
 
@@ -158,7 +157,7 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
                                       return_messages = True),
             agent_kwargs= {
                 "system_message": self.system_message,
-                # "human_message": self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=self.memory),
+                "human_message": temp_human_message
                 }
             )
         print(history)
