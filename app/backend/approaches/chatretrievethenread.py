@@ -122,9 +122,7 @@ History:
         start_time = time.time()
 
         print("Starting answering process")
-        print("Here is the history:")
-        print(history)
-        print(f"Max time limit for chatGPT has been set to {chatgpt_timeout} seconds")
+        print(f"Max time limit for chatGPT has been set to {self.CHATGPT_TIMEOUT} seconds")
 
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 6
@@ -133,17 +131,12 @@ History:
     
         print("Beginning step 1: Generate keyword search query")
 
-        step_time = time.time()
-     
+        print("New history:")
+        filtered_history = self.clear_history(history)
         
-        filtered_history = []
 
-        for entry in history:
-            if 'assistant' not in entry or ']' in entry['assistant']:
-                filtered_history.append(entry)
-        print("new history")
-        print(filtered_history)
-        search_query = self.generate_keyword_query(filtered_history, overrides, chatgpt_timeout)
+        step_time = time.time()
+        search_query = self.generate_keyword_query(filtered_history, overrides, self.CHATGPT_TIMEOUT)
 
         print(f"Finished step 1 in {time.time() - step_time} seconds")
 
@@ -151,7 +144,7 @@ History:
             return {"data_points": "", "answer": "Could not generate query, please try again.", "thoughts": ""}
 
         print(f"Search query: {search_query}")
-   
+      
         print("Beginning step 2: Retrieve documents from search index")
 
         step_time = time.time()
@@ -164,7 +157,7 @@ History:
 
         step_time = time.time()
         prompt = self.format_assistant_prompt(sources, overrides)
-        answer = self.generate_question_answer(prompt, history, overrides, self.CHATGPT_TIMEOUT)
+        answer = self.generate_question_answer(prompt, filtered_history, overrides, self.CHATGPT_TIMEOUT)
         if answer == None:
             print("WARNING: Timeout before generating question answer")
             answer = "Could not answer question, please try again."
@@ -251,19 +244,8 @@ History:
 
         return prompt
 
-    def generate_question_answer(self, filtered_history, sources, overrides, timeout):
-        follow_up_questions_prompt = self.follow_up_questions_prompt_content if overrides.get("suggest_followup_questions") else ""
-        
-        # Allow client to replace the entire prompt, or to inject into the exiting prompt using >>>
-        prompt_override = overrides.get("prompt_template")
-        if prompt_override is None:
-            prompt = self.assistant_prompt.format(follow_up_questions_prompt=follow_up_questions_prompt, injected_prompt="", sources=sources)
-        elif prompt_override.startswith(">>>"):
-            prompt = self.assistant_prompt.format(follow_up_questions_prompt=follow_up_questions_prompt, injected_prompt=prompt_override[3:] + "\n", sources=sources)
-        else:
-            prompt = prompt_override.format(follow_up_questions_prompt=follow_up_questions_prompt, sources=sources)
-
-        messages = self.format_chat_messages(system_prompt=prompt, history=filtered_history, user_question=filtered_history[-1][self.USER])
+    def generate_question_answer(self, prompt, history, overrides, timeout):
+        messages = self.format_chat_messages(system_prompt=prompt, history=history, user_question=history[-1][self.USER])
         future = self.executor.submit(self.get_completion, messages, overrides)
         try:
             completion = future.result(timeout=timeout)
@@ -324,3 +306,13 @@ History:
                 text = "\n".join([text, f"{role}: {content}"])
 
         return text
+
+    def clear_history(self, history):
+        filtered_history = []
+
+        for entry in history:
+            if 'assistant' not in entry or ']' in entry['assistant']:
+                filtered_history.append(entry)
+        print("new history")
+        print(filtered_history)
+        return filtered_history
