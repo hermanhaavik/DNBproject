@@ -28,9 +28,8 @@ class ChatReadRetrieveReadApproach(Approach):
     human_message: str = """
 TOOLS
 ------
-You can use tools to look up information that may be helpful in answering the users question. The tools you can use are:
+You can use tools to look up information that may be helpful in answering the users question.
 
-{tools}
 {format_instructions}
 
 Only use information from the sources below. If you need to use information from another source, tell the user you don't know and that they should contact customer support.
@@ -122,7 +121,7 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
        
         tools: Sequence = [acs_tool]
 
-        temp_human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=history),
+        temp_human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=history[-1].get("user"))
 
         # memory = ConversationBufferMemory(memory_key = "chat_history", 
         #                               input_key = "input",
