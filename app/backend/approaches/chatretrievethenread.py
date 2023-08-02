@@ -33,6 +33,17 @@ You are an insurance customer assistant representing DNB bank. Be brief in your 
 Answer ONLY with the facts listed in the list of sources below ```Sources```. If there isn't enough information below or the answer is not related to the sources, say you don't know. If asking a clarifying question to the user would help, ask the question.
 For tabular information return it as an html table. Do not return markdown format.
 Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
+When asked a question and there are no sources available, tell the customer that you unfortunately cant answer that, as its not in your sources.
+When asked a question you have been asked earlier in the chat, tell the customer the same thing as earlier, or tell them to be more specific please
+Examples:
+User: Does DNB offer house insurance?
+Assistent: DNB does offer house insurance [Source 1]
+User: What is the price of the house insurance?
+Assistent: That depends on several factors, allow us to calculate how much insurance is going to cost you by going to our website. [Source 1]
+User: What is the difference between a cat and a dog?
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance
+User: What is Kasko?
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance
 {follow_up_questions_prompt}
 {injected_prompt}
 ```Sources```
@@ -111,7 +122,9 @@ History:
         start_time = time.time()
 
         print("Starting answering process")
-        print(f"Max time limit for chatGPT has been set to {self.CHATGPT_TIMEOUT} seconds")
+        print("Here is the history:")
+        print(history)
+        print(f"Max time limit for chatGPT has been set to {chatgpt_timeout} seconds")
 
         use_semantic_captions = True if overrides.get("semantic_captions") else False
         top = overrides.get("top") or 6
@@ -121,7 +134,16 @@ History:
         print("Beginning step 1: Generate keyword search query")
 
         step_time = time.time()
-        search_query = self.generate_keyword_query(history, overrides, self.CHATGPT_TIMEOUT)
+     
+        
+        filtered_history = []
+
+        for entry in history:
+            if 'assistant' not in entry or ']' in entry['assistant']:
+                filtered_history.append(entry)
+        print("new history")
+        print(filtered_history)
+        search_query = self.generate_keyword_query(filtered_history, overrides, chatgpt_timeout)
 
         print(f"Finished step 1 in {time.time() - step_time} seconds")
 
@@ -229,8 +251,19 @@ History:
 
         return prompt
 
-    def generate_question_answer(self, prompt, history, overrides, timeout):
-        messages = self.format_chat_messages(system_prompt=prompt, history=history, user_question=history[-1][self.USER])
+    def generate_question_answer(self, filtered_history, sources, overrides, timeout):
+        follow_up_questions_prompt = self.follow_up_questions_prompt_content if overrides.get("suggest_followup_questions") else ""
+        
+        # Allow client to replace the entire prompt, or to inject into the exiting prompt using >>>
+        prompt_override = overrides.get("prompt_template")
+        if prompt_override is None:
+            prompt = self.assistant_prompt.format(follow_up_questions_prompt=follow_up_questions_prompt, injected_prompt="", sources=sources)
+        elif prompt_override.startswith(">>>"):
+            prompt = self.assistant_prompt.format(follow_up_questions_prompt=follow_up_questions_prompt, injected_prompt=prompt_override[3:] + "\n", sources=sources)
+        else:
+            prompt = prompt_override.format(follow_up_questions_prompt=follow_up_questions_prompt, sources=sources)
+
+        messages = self.format_chat_messages(system_prompt=prompt, history=filtered_history, user_question=filtered_history[-1][self.USER])
         future = self.executor.submit(self.get_completion, messages, overrides)
         try:
             completion = future.result(timeout=timeout)
