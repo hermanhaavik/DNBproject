@@ -33,6 +33,17 @@ You are an insurance customer assistant representing DNB bank. Be brief in your 
 Answer ONLY with the facts listed in the list of sources below ```Sources```. If there isn't enough information below or the answer is not related to the sources, say you don't know. If asking a clarifying question to the user would help, ask the question.
 For tabular information return it as an html table. Do not return markdown format.
 Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
+When asked a question and there are no sources available, tell the customer that you unfortunately cant answer that, as its not in your sources.
+When asked a question you have been asked earlier in the chat, tell the customer the same thing as earlier, or tell them to be more specific please
+Examples:
+User: Does DNB offer house insurance?
+Assistent: DNB does offer house insurance [Source 1]
+User: What is the price of the house insurance?
+Assistent: That depends on several factors, allow us to calculate how much insurance is going to cost you by going to our website. [Source 1]
+User: What is the difference between a cat and a dog?
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance
+User: What is Kasko?
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance
 {follow_up_questions_prompt}
 {injected_prompt}
 ```Sources```
@@ -49,6 +60,44 @@ If the question is not in English, translate the question to English before gene
 History:
 {history}
 """
+    few_shot_examples = [
+    {
+        "role": USER, 'content': "Does DNB offer house insurance?"
+    },    
+    {
+        "role": ASSISTANT, 'content': "DNB does offer house insurance [Source Name 1] "
+    },
+    {
+        "role": USER, 'content': "What is Toppkasko" 
+    },
+    {
+        "role": ASSISTANT, 'content': "Im sorry, i have no sources about that, please ask about something related to house insurance",
+    },
+
+    {
+        "role": USER, 'content': "Does house insurance also cover fungus and rot?",
+        
+    },
+    {
+        "role": ASSISTANT, 'content': "House insurance from DNB can also cover fungus and rot as additional add ons, go to the insurance website to find more information about what add ons are availabel and their price [Source Name 2] [Source Name 5]",
+    },
+
+    {
+        "role": USER, 'content': "What is the best insurance for me?",
+
+    },    
+    {
+        "role": ASSISTANT, 'content': "There are several factors that are of relevance when finding a suitable insurance, talking with a DNB employee can help you with finding out what fits for you, or checking out the website [Source Name 2]",
+    } ,
+    {
+        "role": USER, 'content': "What is the difference between a cat and a dog",
+       
+    },
+    {
+         "role": ASSISTANT, 'content': "Im sorry, i have no sources about that, please ask about something related to house insurance",
+    }
+
+    ]
 
     query_prompt_few_shots = [
         {'role' : USER, 'content' : 'What house insurance does DNB provide?' },
@@ -82,8 +131,12 @@ History:
     
         print("Beginning step 1: Generate keyword search query")
 
+        print("New history:")
+        filtered_history = self.clear_history(history)
+        
+
         step_time = time.time()
-        search_query = self.generate_keyword_query(history, overrides, self.CHATGPT_TIMEOUT)
+        search_query = self.generate_keyword_query(filtered_history, overrides, self.CHATGPT_TIMEOUT)
 
         print(f"Finished step 1 in {time.time() - step_time} seconds")
 
@@ -91,7 +144,7 @@ History:
             return {"data_points": "", "answer": "Could not generate query, please try again.", "thoughts": ""}
 
         print(f"Search query: {search_query}")
-   
+      
         print("Beginning step 2: Retrieve documents from search index")
 
         step_time = time.time()
@@ -104,7 +157,7 @@ History:
 
         step_time = time.time()
         prompt = self.format_assistant_prompt(sources, overrides)
-        answer = self.generate_question_answer(prompt, history, overrides, self.CHATGPT_TIMEOUT)
+        answer = self.generate_question_answer(prompt, filtered_history, overrides, self.CHATGPT_TIMEOUT)
         if answer == None:
             print("WARNING: Timeout before generating question answer")
             answer = "Could not answer question, please try again."
@@ -253,3 +306,13 @@ History:
                 text = "\n".join([text, f"{role}: {content}"])
 
         return text
+
+    def clear_history(self, history):
+        filtered_history = []
+
+        for entry in history:
+            if 'assistant' not in entry or ']' in entry['assistant']:
+                filtered_history.append(entry)
+        print("new history")
+        print(filtered_history)
+        return filtered_history
