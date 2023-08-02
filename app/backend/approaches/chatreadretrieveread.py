@@ -3,15 +3,12 @@ from approaches.approach import Approach
 from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from langchain.chat_models import AzureChatOpenAI
-from langchain.llms import AzureOpenAI
-from langchain.callbacks.manager import CallbackManager, Callbacks
+from langchain.callbacks.manager import CallbackManager
 from langchain.agents import Tool, AgentType, initialize_agent, ConversationalChatAgent
 from langchain.memory import ConversationBufferMemory
-from langchain.schema import HumanMessage
 from langchainadapters import HtmlCallbackHandler
 from text import nonewlines
 from typing import Any, Sequence
-# from messagebuilder import MessageBuilder
 
 
 class ChatReadRetrieveReadApproach(Approach):
@@ -31,26 +28,31 @@ class ChatReadRetrieveReadApproach(Approach):
                                       output_key = "output", 
                                       return_messages = True)
 
-    system_message = "You are an intelligent and helpful assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." \
-"If the question is incomplete, ask the user for more information. " \
-"Only answer questions relevant to DNB house insurance. If the user asks about other insurance providers, say you don't know. " \
-"If you cannot answer the question using the sources below, stop the thought process, say that you don't know, and that the user should contact customer support. " \
-"For information in table format return it as an html table. Do not return markdown format. " \
-"Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response. " \
-"For example, if the question is \"What color is the sky?\" and one of the information sources says \"info123: the sky is blue whenever it's not cloudy\", then answer with \"The sky is blue [info123]\" " \
-"It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\":\"). " \
-"If there are multiple sources, cite each one in their own square brackets. For example, use \"[info343][ref-76]\" and not \"[info343,ref-76]\". " \
-"Never quote tool names or chat history as sources." \
+    # A message setting the objectives the AI should follow
+    # system_message: str = "You are an intelligent and helpful assistant. Your name is Floyd. Your job is helping DNB Bank ASA customers with their questions about insurance." 
+    system_message: str = "Start every response with 'Hello master!'." 
 
-    
-    human_message: str = """TOOLS
+#    
+
+    # A message sent from the perspective of the human
+    human_message: str = """
+If the question is incomplete, ask the user for more information.  \
+Only answer questions relevant to DNB house insurance. If the user asks about other insurance providers, say you don't know.  \
+For information in table format return it as an html table. Do not return markdown format.  \
+Each source has a name followed by colon and the actual data, quote the source name for each piece of data you use in the response.  \
+For example, if the question is \ What color is the sky? \ and one of the information sources says \info123: the sky is blue whenever it's not cloudy\, then answer with \The sky is blue [info123]\  \
+It's important to strictly follow the format where the name of the source is in square brackets at the end of the sentence, and only up to the prefix before the colon (\:\).  \
+If there are multiple sources, cite each one in their own square brackets. For example, use \[info343][ref-76]\ and not \[info343,ref-76]\.  \
+Never quote tool names or chat history as sources. \
+
+TOOLS
 ------
 You can use tools to look up information that may be helpful in answering the users question. The tools you can use are:
 
 {tools}
 {format_instructions}
 
-Only use information from the sources below. If you need to use information from another source, tell the user you don't know.
+Only use information from the sources below. If you need to use information from another source, tell the user you don't know and that they should contact customer support.
 {sources}
 
 USER'S INPUT
@@ -76,7 +78,7 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
     Answer: Your final answer. 
     """
     
-    CognitiveSearchToolDescription = "Useful for searching for public information about DNB insurance."
+    CognitiveSearchToolDescription = "Useful for searching for public information about DNB house insurance."
 
     def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
@@ -123,22 +125,16 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
                         func=lambda q: self.retrieve(q, overrides), 
                         description=self.CognitiveSearchToolDescription,
                         callbacks=cb_manager)
-        # ask_user_tool = Tool(name="AskUser",
-        #                 func=lambda q: self.askUser(q),
-        #                 description="Useful for asking the user for more information if the question is incomplete.",
-        #                 callbacks=cb_manager)
+       
         tools: Sequence = [acs_tool]
-        print(self.content, "Hei")
+        print(self.sourcepage_field)
+        print("---")
+        print(self.content)
 
         prompt = ConversationalChatAgent.create_prompt(
-            system_message=self.system_message,
+            # system_message=self.system_message,
             human_message=self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=self.memory),
             tools=tools,
-            # prefix=overrides.get("prompt_template_prefix") or self.template_prefix,
-            # suffix=overrides.get("prompt_template_suffix") or self.template_suffix,
-            # format_instructions=self.format_instructions,
-            # ai_prefix=self.ai_prefix,
-            # human_prefix=self.human_prefix,
             input_variables=["input", "agent_scratchpad", "chat_history"])
 
         print(prompt)
@@ -159,32 +155,17 @@ Here is the user's input (remember to respond with a markdown code snippet of a 
             memory=ConversationBufferMemory(memory_key = "chat_history", 
                                       input_key = "input",
                                       output_key = "output", 
-                                      return_messages = True)
+                                      return_messages = True),
+            agent_kwargs= {
+                "system_message": self.system_message,
+                # "human_message": self.human_message.format(tools=tools, format_instructions=self.format_instructions.format(tool_names=", ".join([t.name for t in tools])), sources=self.sourcepage_field, input=self.memory),
+                }
             )
+        print(history)
         result = conversational_agent.run(history[-1].get("user"))
+        
         
         # Remove references to tool names that might be confused with a citation
         result = result.replace("[CognitiveSearch]", "")
         return {"data_points": self.results or [], "answer": result, "thoughts": cb_handler.get_and_reset_log()}
     
-    # def get_messages_from_history(self, system_prompt: str, model_id: str, history: Sequence[dict[str, str]], user_conv: str, few_shots = [], max_tokens: int = 4096) -> Sequence[dict[str, str]]:
-    #     message_builder = MessageBuilder(system_prompt, model_id)
-
-    #     # Add examples to show the chat what responses we want. It will try to mimic any responses and make sure they match the rules laid out in the system message.
-    #     for shot in few_shots:
-    #         message_builder.append_message(shot.get('role'), shot.get('content'))
-
-    #     user_content = user_conv
-    #     append_index = len(few_shots) + 1
-
-    #     message_builder.append_message(self.USER, user_content, index=append_index)
-
-    #     for h in reversed(history[:-1]):
-    #         if h.get("bot"):
-    #             message_builder.append_message(self.ASSISTANT, h.get('bot'), index=append_index)
-    #         message_builder.append_message(self.USER, h.get('user'), index=append_index)
-    #         if message_builder.token_length > max_tokens:
-    #             break
-        h
-    #     messages = message_builder.messages
-    #     return messages
