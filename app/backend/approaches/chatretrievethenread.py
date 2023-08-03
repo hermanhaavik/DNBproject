@@ -106,7 +106,8 @@ History:
         {'role' : ASSISTANT, 'content' : 'standard house insurance coverage' }
     ]
 
-    follow_up_questions_prompt_content = """After giving your answer, generate three very brief follow-up questions that the user would likely ask next about their insurance.
+    follow_up_questions_prompt_content = """After giving your answer, generate three very brief follow-up questions that the user would likely ask next.
+    Base your questions on the sources used in the previous answer if there are any sources there.
     Use double angle brackets to reference the questions, e.g. <<What is the cheapest alternative?>>.
     Try not to repeat questions that have already been asked.
     Only generate questions and do not generate any text before or after the questions, such as 'Next Questions'"""
