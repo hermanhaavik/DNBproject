@@ -20,7 +20,7 @@ class ChatRetrieveThenReadApproach(Approach):
     USER = "user"
     ASSISTANT = "assistant"
 
-    DOCUMENT_SCORE_CUTOFF = 1.2
+    DOCUMENT_SCORE_CUTOFF = 1
 
     CHATGPT_TIMEOUT = 600
     CHATGPT_RETRY_WAIT = 1
