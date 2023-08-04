@@ -2,13 +2,15 @@ import time
 import re
 import concurrent.futures
 from typing import Any, Sequence
-
 import openai
 import openai.error
 from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from approaches.approach import Approach
 from text import nonewlines
+from azure.ai.translation.text import TextTranslationClient, TranslatorCredential
+from azure.ai.translation.text.models import InputTextItem
+from azure.core.exceptions import HttpResponseError
 
 class ChatRetrieveThenReadApproach(Approach):
     """
@@ -21,7 +23,7 @@ class ChatRetrieveThenReadApproach(Approach):
     USER = "user"
     ASSISTANT = "assistant"
 
-    DOCUMENT_SCORE_CUTOFF = 1.0
+    DOCUMENT_SCORE_CUTOFF = 0.5
 
     CHATGPT_TIMEOUT = 600
     CHATGPT_RETRY_WAIT = 1
@@ -33,6 +35,17 @@ You are helpful insurance customer assistant representing DNB bank ASA. You resp
 Answer ONLY with the facts listed in the list of sources below ```Sources```. If there isn't enough information below or the answer is not related to the sources, say you don't know. If asking a clarifying question to the user would help, ask the question.
 For tabular information return it as an html table. Do not return markdown format.
 Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
+When asked a question and there are no sources available, tell the customer that you unfortunately cant answer that, as its not in your sources.
+When asked a question you have been asked earlier in the chat, tell the customer the same thing as earlier, or tell them to be more specific please
+Examples:
+User: Does DNB offer house insurance?
+Assistent: DNB does offer house insurance [Source 1]
+User: What is the price of the house insurance?
+Assistent: That depends on several factors, allow us to calculate how much insurance is going to cost you by going to our website. [Source 1]
+User: What is the difference between a cat and a dog?
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance
+User: What is Kasko?
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance
 {follow_up_questions_prompt}
 {injected_prompt}
 ```Sources```
@@ -44,11 +57,57 @@ Generate a search query based on the conversation and the new question.
 Do not include cited source filenames and document names e.g info.txt or doc.pdf in the search query terms.
 Do not include any text inside [] or <<>> in the search query terms.
 Do not include any special characters like '+'.
-Translate the question to English before generating the search query if necessarry.
----
+It is important that the search query is in english such that cognitive search can search efficient you can use the example below:
+"Query: Hva er husforsikring?
+Search query: What is house insurance?
+Query: ¿Cuánto cuesta el seguro de automóvil? "
+Search query: What does car insurance cost?
+Query: Was ist der Unterschied zwischen Hausratversicherung und Hausratversicherung?
+Search query: What is the difference between contents insurance and home insurance
+
+ 
+
 History:
 {history}
 """
+    few_shot_examples = [
+    {
+        "role": USER, 'content': "Does DNB offer house insurance?"
+    },    
+    {
+        "role": ASSISTANT, 'content': "DNB does offer house insurance [Source Name 1] "
+    },
+    {
+        "role": USER, 'content': "What is Toppkasko" 
+    },
+    {
+        "role": ASSISTANT, 'content': "Im sorry, i have no sources about that, please ask about something related to house insurance",
+    },
+
+    {
+        "role": USER, 'content': "Does house insurance also cover fungus and rot?",
+        
+    },
+    {
+        "role": ASSISTANT, 'content': "House insurance from DNB can also cover fungus and rot as additional add ons, go to the insurance website to find more information about what add ons are availabel and their price [Source Name 2] [Source Name 5]",
+    },
+
+    {
+        "role": USER, 'content': "What is the best insurance for me?",
+
+    },    
+    {
+        "role": ASSISTANT, 'content': "There are several factors that are of relevance when finding a suitable insurance, talking with a DNB employee can help you with finding out what fits for you, or checking out the website [Source Name 2]",
+    } ,
+    {
+        "role": USER, 'content': "What is the difference between a cat and a dog",
+       
+    },
+    {
+         "role": ASSISTANT, 'content': "Im sorry, i have no sources about that, please ask about something related to house insurance",
+    }
+
+    ]
 
     query_prompt_few_shots = [
         {'role' : USER, 'content' : 'What house insurance does DNB provide?' },
@@ -68,6 +127,34 @@ History:
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
         self.executor = concurrent.futures.ThreadPoolExecutor()
+        # Translate cliente 
+        # set `<your-key>`, `<your-endpoint>`, and  `<region>` variables with the values from the Azure portal
+        key = "511b17623f764091a3cea6d47747548f"
+        endpoint = "https://api.cognitive.microsofttranslator.com/"
+        region = "westeurope"
+        try: 
+            credential = TranslatorCredential(key, region)
+            self.text_translator = TextTranslationClient(endpoint=endpoint, credential=credential)
+        except HttpResponseError as exception:
+            print(f"Error Code: {exception.error.code}")
+            print(f"Message: {exception.error.message}")
+
+    def identify_language(self,q:str)->str:
+       self.text_translator.get_languages()
+       return ""
+    
+    def translate_language(self,q:str,source_language:str,target_language:str)->str:
+        translated_query = ""
+        print(f"QUERY: {q}")
+        input_text_elements = [ InputTextItem(text = q) ]
+        response = self.text_translator.translate(content = input_text_elements, to = [target_language], from_parameter = source_language)
+        print(f"THE RESPONSE {response}")
+        translation = response[0] if response else None
+        if not translation:
+            return None
+        translated_query = translation['translations'][0]['text']
+        print(f"translated query: {translated_query}")
+        return translated_query
 
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         start_time = time.time()
@@ -82,16 +169,18 @@ History:
     
         print("Beginning step 1: Generate keyword search query")
 
-        step_time = time.time()
-        search_query = self.generate_keyword_query(history, overrides, self.CHATGPT_TIMEOUT)
+        filtered_history = self.clear_history(history)
+        
 
+        step_time = time.time()
+        search_query = self.generate_keyword_query(filtered_history, overrides, self.CHATGPT_TIMEOUT)
         print(f"Finished step 1 in {time.time() - step_time} seconds")
 
         if search_query == None:
             return {"data_points": "", "answer": "Could not generate query, please try again.", "thoughts": ""}
 
-        print(f"Search query: {search_query}")
-   
+        print(f" Original search query: {search_query}")
+      
         print("Beginning step 2: Retrieve documents from search index")
 
         step_time = time.time()
@@ -104,10 +193,11 @@ History:
 
         step_time = time.time()
         prompt = self.format_assistant_prompt(sources, overrides)
-        answer = self.generate_question_answer(prompt, history, overrides, self.CHATGPT_TIMEOUT)
+        answer = self.generate_question_answer(prompt, filtered_history, overrides, self.CHATGPT_TIMEOUT)
         if answer == None:
             print("WARNING: Timeout before generating question answer")
             answer = "Could not answer question, please try again."
+            
 
         if not self.check_answer_sources(answer, documents):
             print("WARNING: Generated question answer used sources incorrectly")
@@ -253,3 +343,13 @@ History:
                 text = "\n".join([text, f"{role}: {content}"])
 
         return text
+
+    def clear_history(self, history):
+        filtered_history = []
+
+        for entry in history:
+            if 'assistant' not in entry or ']' in entry['assistant']:
+                filtered_history.append(entry)
+        print("new history")
+        print(filtered_history)
+        return filtered_history
