@@ -9,14 +9,14 @@ export type ExampleModel = {
 
 const EXAMPLES: ExampleModel[] = [
     {
-        text: "How much does insurance coverage typically cost?",
-        value: "How much does insurance coverage typically cost?"
+        text: "What is house insurance, and what does it cover?",
+        value: "What is house insurance, and what does it cover?"
     },
     {
-        text: "What types of events or damages are not covered by my insurance policy?",
-        value: "What types of events or damages are not covered by my insurance policy?"
+        text: "What is the difference between comprehensive and fully comprehensive car insurance?",
+        value: "What is the difference between comprehensive and fully comprehensive car insurance?"
     },
-    { text: "Can I transfer my insurance policy to a new vehicle or property?", value: "Can I transfer my insurance policy to a new vehicle or property?" }
+    { text: "What is the max value of content in contentinsurance?", value: "What is the max value of content in contentinsurance?" }
 ];
 
 interface Props {
