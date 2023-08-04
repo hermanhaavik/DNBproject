@@ -2,7 +2,6 @@ import time
 import re
 import concurrent.futures
 from typing import Any, Sequence
-
 import openai
 import openai.error
 from azure.search.documents import SearchClient
@@ -29,7 +28,7 @@ class ChatRetrieveThenReadApproach(Approach):
 
 
     assistant_prompt = """
-You are an insurance customer assistant representing DNB bank. Be brief in your answers. If the user asks something unrelated to DNB insurance, say that you can't answer that.
+You are helpful insurance customer assistant representing DNB bank ASA. You respond with the same language as the question wes asked. Be brief in your answers. If the user asks something unrelated to DNB insurance, say that you can't answer that.
 Answer ONLY with the facts listed in the list of sources below ```Sources```. If there isn't enough information below or the answer is not related to the sources, say you don't know. If asking a clarifying question to the user would help, ask the question.
 For tabular information return it as an html table. Do not return markdown format.
 Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
@@ -55,7 +54,15 @@ Generate a search query based on the conversation and the new question.
 Do not include cited source filenames and document names e.g info.txt or doc.pdf in the search query terms.
 Do not include any text inside [] or <<>> in the search query terms.
 Do not include any special characters like '+'.
-If the question is not in English, translate the question to English before generating the search query.
+It is important that the search query is in english such that cognitive search can search efficient you can use the example below:
+"Query: Hva er husforsikring?
+Search query: What is house insurance?
+Query: ¿Cuánto cuesta el seguro de automóvil? "
+Search query: What does car insurance cost?
+Query: Was ist der Unterschied zwischen Hausratversicherung und Hausratversicherung?
+Search query: What is the difference between contents insurance and home insurance
+
+ 
 
 History:
 {history}
@@ -118,7 +125,7 @@ History:
         self.sourcepage_field = sourcepage_field
         self.content_field = content_field
         self.executor = concurrent.futures.ThreadPoolExecutor()
-
+    
     def run(self, history: Sequence[dict[str, str]], overrides: dict[str, Any]) -> Any:
         start_time = time.time()
 
@@ -136,20 +143,19 @@ History:
         
         step_time = time.time()
         search_query = self.generate_keyword_query(filtered_history, overrides, self.CHATGPT_TIMEOUT)
-
         print(f"Finished step 1 in {time.time() - step_time} seconds")
 
         if search_query == None:
             return {"data_points": "", "answer": "Could not generate query, please try again.", "thoughts": ""}
 
-        print(f"Search query: {search_query}")
+        print(f" Original search query: {search_query}")
       
         print("Beginning step 2: Retrieve documents from search index")
 
         step_time = time.time()
         documents = self.retrieve_documents(search_query, top, filter, use_semantic_captions, overrides)
         source_list = self.documents_to_sources(documents, use_semantic_captions)
-        sources = len(source_list) and "\n".join(source_list) or "No sources found"
+        sources = len(source_list) and "\n".join(source_list) or ""
 
         print(f"Finished step 2 in {time.time() - step_time} seconds")
         print("Beginning step 3: Generate question answer")
@@ -160,6 +166,7 @@ History:
         if answer == None:
             print("WARNING: Timeout before generating question answer")
             answer = "Could not answer question, please try again."
+            
 
         print("Generated answer: ", answer)
 
