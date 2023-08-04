@@ -134,7 +134,7 @@ History:
         print("New history:")
         filtered_history = self.clear_history(history)
         
-
+        
         step_time = time.time()
         search_query = self.generate_keyword_query(filtered_history, overrides, self.CHATGPT_TIMEOUT)
 
