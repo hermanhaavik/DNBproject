@@ -39,13 +39,12 @@ KB_FIELDS_SOURCEPAGE = os.environ.get("KB_FIELDS_SOURCEPAGE") or "sourcepage"
 azure_credential = DefaultAzureCredential()
 
 # Used by the OpenAI SDK
-openai.api_type = "azure"
+openai.api_type = "azure_ad"
 openai.api_base = f"https://{AZURE_OPENAI_SERVICE}.openai.azure.com"
 openai.api_version = "2023-06-01-preview"
 
-# Comment these two lines out if using keys, set your API key in the OPENAI_API_KEY environment variable instead
 openai_token = azure_credential.get_token("https://cognitiveservices.azure.com/.default")
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+openai.api_key = openai_token.token
 
 # Set up clients for Cognitive Search and Storage
 search_client = SearchClient(
