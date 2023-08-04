@@ -132,10 +132,8 @@ History:
     
         print("Beginning step 1: Generate keyword search query")
 
-        print("New history:")
         filtered_history = self.clear_history(history)
         
-
         step_time = time.time()
         search_query = self.generate_keyword_query(filtered_history, overrides, self.CHATGPT_TIMEOUT)
 
@@ -163,9 +161,12 @@ History:
             print("WARNING: Timeout before generating question answer")
             answer = "Could not answer question, please try again."
 
-        if not self.check_answer_sources(answer, documents):
+        print("Generated answer: ", answer)
+
+        if not self.check_answer_sources(answer, documents, filtered_history):
             print("WARNING: Generated question answer used sources incorrectly")
             answer = "Sorry, I do not have information related to your question."
+
 
         print(f"Finished step 3 in {time.time() - step_time} seconds")
         print(f"Answering process completed in {time.time() - start_time} seconds")
@@ -217,15 +218,18 @@ History:
 
         return results
 
-    def check_answer_sources(self, answer, documents):
-        answer_sources = re.findall(r"\[([^]]+)\]", answer)
-        document_names = [doc[self.sourcepage_field] for doc in documents]
+    def check_answer_sources(self, answer, documents, history):
+        source_regex = r"\[([^]]+)\]"
+        answer_sources = re.findall(source_regex, answer)
+        search_documents = [doc[self.sourcepage_field] for doc in documents]
+        history_documents = [src for msg in history if self.ASSISTANT in msg for src in re.findall(source_regex, msg[self.ASSISTANT])]
 
         print("Answer sources: ", answer_sources)
-        print("Document names: ", document_names)
+        print("Documents from search: ", search_documents)
+        print("Documents from history: ", history_documents)
 
         for source in answer_sources:
-            if source not in document_names:
+            if source not in search_documents and source not in history_documents:
                 print(f"Tried to use incorrect source {source} in answer")
                 return False
 
@@ -314,6 +318,5 @@ History:
         for entry in history:
             if 'assistant' not in entry or ']' in entry['assistant']:
                 filtered_history.append(entry)
-        print("new history")
-        print(filtered_history)
+
         return filtered_history
