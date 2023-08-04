@@ -67,44 +67,7 @@ Search query: What is the difference between contents insurance and home insuran
 History:
 {history}
 """
-    few_shot_examples = [
-    {
-        "role": USER, 'content': "Does DNB offer house insurance?"
-    },    
-    {
-        "role": ASSISTANT, 'content': "DNB does offer house insurance [Source Name 1] "
-    },
-    {
-        "role": USER, 'content': "What is Toppkasko" 
-    },
-    {
-        "role": ASSISTANT, 'content': "Im sorry, i have no sources about that, please ask about something related to house insurance",
-    },
 
-    {
-        "role": USER, 'content': "Does house insurance also cover fungus and rot?",
-        
-    },
-    {
-        "role": ASSISTANT, 'content': "House insurance from DNB can also cover fungus and rot as additional add ons, go to the insurance website to find more information about what add ons are availabel and their price [Source Name 2] [Source Name 5]",
-    },
-
-    {
-        "role": USER, 'content': "What is the best insurance for me?",
-
-    },    
-    {
-        "role": ASSISTANT, 'content': "There are several factors that are of relevance when finding a suitable insurance, talking with a DNB employee can help you with finding out what fits for you, or checking out the website [Source Name 2]",
-    } ,
-    {
-        "role": USER, 'content': "What is the difference between a cat and a dog",
-       
-    },
-    {
-         "role": ASSISTANT, 'content': "Im sorry, i have no sources about that, please ask about something related to house insurance",
-    }
-
-    ]
 
     query_prompt_few_shots = [
         {'role' : USER, 'content' : 'What house insurance does DNB provide?' },
@@ -117,6 +80,7 @@ History:
     Base your questions on the sources used in the previous answer or the earlier messages in the history.
     Use double angle brackets to reference the questions, e.g. <<What is the cheapest alternative?>> <<How can i switch insurance?>> <<What is included in comprehensive insurance?>>
     Try not to repeat questions that have already been asked.
+    The questions should not be repeated
     Only generate questions and do not generate any text before or after the questions, such as 'Next Questions'
     I repeat, the questions should be presented as plain text with brackets, no other text before or after them"""
 
@@ -181,6 +145,10 @@ History:
         print(f"Answering process completed in {time.time() - start_time} seconds")
 
         thoughts = f"Searched for:<br>{search_query}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')
+        if overrides.get("suggest_followup_questions"):
+            answer = self.remove_wrong_questions_format(answer,"Next Questions: ")
+
+        
         return {"data_points": source_list, "answer": answer, "thoughts": thoughts}
 
     def generate_keyword_query(self, history, overrides, timeout):
@@ -329,3 +297,10 @@ History:
                 filtered_history.append(entry)
 
         return filtered_history
+    
+    def remove_wrong_questions_format(self, answer, substring):
+        print("Checking for wrong format in suggested answers...")
+        new_answer = answer.replace(substring, "")
+        if  (new_answer != answer):
+            print(f"Removed {substring} from answer")
+        return new_answer
