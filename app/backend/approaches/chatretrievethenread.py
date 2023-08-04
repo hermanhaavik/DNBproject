@@ -114,11 +114,11 @@ History:
     ]
 
     follow_up_questions_prompt_content = """After giving your answer, generate three very brief follow-up questions that the user would likely ask next.
-    Base your questions on the sources used in the previous answer if there are any sources there. You can also suggests questions that 
-    Use double angle brackets to reference the questions, e.g. <<What is the cheapest alternative?>>.
+    Base your questions on the sources used in the previous answer or the earlier messages in the history.
+    Use double angle brackets to reference the questions, e.g. <<What is the cheapest alternative?>> <<How can i switch insurance?>> <<What is included in comprehensive insurance?>>
     Try not to repeat questions that have already been asked.
     Only generate questions and do not generate any text before or after the questions, such as 'Next Questions'
-    I repeat, the questions should be presented as plain text with no other text before or after them"""
+    I repeat, the questions should be presented as plain text with brackets, no other text before or after them"""
 
 
     def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
