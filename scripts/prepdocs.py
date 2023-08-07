@@ -43,8 +43,10 @@ parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output
 args = parser.parse_args()
 
 # TODO: Read from arguments
-urls = ["www.dnb.no/forsikring/bilforsikring", "www.dnb.no/forsikring", "www.dnb.no/forsikring/husforsikring", "www.dnb.no/forsikring/innboforsikring", "www.dnb.no/forsikring/reiseforsikring", "www.dnb.no/forsikring/personforsikring", "www.dnb.no/forsikring/meld-skade", "www.dnb.no/forsikring/rabatt", "www.dnb.no/forsikring/best-i-test-forsikring", "www.dnb.no/forsikring/fremtind", "www.dnb.no/forsikring/verdisakforsikring", "www.dnb.no/forsikring/verdisakforsikring/sykkelforsikring", "www.dnb.no/forsikring/kjoretoy/sma-elektriske-kjoretoy", "www.dnb.no/forsikring/verdisakforsikring/bunadsforsikring", "www.dnb.no/forsikring/kjoretoy", "www.dnb.no/forsikring/kjoretoy/batforsikring", "www.dnb.no/forsikring/kjoretoy/motorsykkelforsikring", "www.dnb.no/forsikring/kjoretoy/bobilforsikring", "www.dnb.no/forsikring/kjoretoy/campingvognforsikring", "www.dnb.no/forsikring/kjoretoy/mopedforsikring", "www.dnb.no/forsikring/kjoretoy/snoscooterforsikring", "www.dnb.no/forsikring/kjoretoy/tilhengerforsikring", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_ansvar_bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Minikasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Kasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Toppkasko_Bil.pdf", "dokument.fremtind.no/ipid/IPID_BIL.pdf"]
+# urls = ["www.dnb.no/forsikring/bilforsikring", "www.dnb.no/forsikring", "www.dnb.no/forsikring/husforsikring", "www.dnb.no/forsikring/innboforsikring", "www.dnb.no/forsikring/reiseforsikring", "www.dnb.no/forsikring/personforsikring", "www.dnb.no/forsikring/meld-skade", "www.dnb.no/forsikring/rabatt", "www.dnb.no/forsikring/best-i-test-forsikring", "www.dnb.no/forsikring/fremtind", "www.dnb.no/forsikring/verdisakforsikring", "www.dnb.no/forsikring/verdisakforsikring/sykkelforsikring", "www.dnb.no/forsikring/kjoretoy/sma-elektriske-kjoretoy", "www.dnb.no/forsikring/verdisakforsikring/bunadsforsikring", "www.dnb.no/forsikring/kjoretoy", "www.dnb.no/forsikring/kjoretoy/batforsikring", "www.dnb.no/forsikring/kjoretoy/motorsykkelforsikring", "www.dnb.no/forsikring/kjoretoy/bobilforsikring", "www.dnb.no/forsikring/kjoretoy/campingvognforsikring", "www.dnb.no/forsikring/kjoretoy/mopedforsikring", "www.dnb.no/forsikring/kjoretoy/snoscooterforsikring", "www.dnb.no/forsikring/kjoretoy/tilhengerforsikring", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_ansvar_bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Minikasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Kasko_Bil.pdf", "dokument.fremtind.no/vilkar/fremtind/pm/mobilitet/Vilkar_Toppkasko_Bil.pdf", "dokument.fremtind.no/ipid/IPID_BIL.pdf"]
+# urls = ["www.dnb.no/forsikring/bilforsikring", "www.dnb.no/forsikring", "www.dnb.no/forsikring/husforsikring", "www.dnb.no/forsikring/innboforsikring"]
 
+url_sources = [("www.dnb.no/en/insurance/house-insurance", "house insurance"), ("www.dnb.no/en/insurance/home-contents-insurance", "content insurance"), ("www.dnb.no/en/insurance/car-insurance", "car insurance"), ("www.dnb.no/en/insurance", "general insurance information")]
 file_sources = [("data/Car insurance.pdf", "car insurance"), ("data/HouseInsuranceTest.pdf", "house insurance"),  ("data/contentinsurance.pdf",  "content insurance")]
 
 # Use the current user identity to connect to Azure services unless a key is explicitly set for any of them
@@ -180,24 +182,24 @@ def get_html_page_text(url):
                             section_text += f"\n- {item.get_text(strip=True)}"
                     else:
                         section_text = "\n".join([section_text, elem.get_text(strip=True)])
-        elif section_type == "comparisonTable":
-            table_html = "<table>"
-            table = section.find("table")
-            for row in table.find_all("tr"):
-                table_html += "<tr>"
-                for cell in row.find_all(["td", "th"]):
-                    table_html += f"<{cell.name}>"
-                    content = cell.get_text(strip=True)
-                    # Some cells use checkmarks instead of text
-                    if len(content) == 0 and cell.find("svg"):
-                        content = "X"
-
-                    table_html += content
-                    table_html += f"</{cell.name}>"
-                table_html += "</tr"
-            table_html += "</table>"
-
-            section_text = table_html
+        # elif section_type == "comparisonTable":
+        #     table_html = "<table>"
+        #     table = section.find("table")
+        #     for row in table.find_all("tr"):
+        #         table_html += "<tr>"
+        #         for cell in row.find_all(["td", "th"]):
+        #             table_html += f"<{cell.name}>"
+        #             content = cell.get_text(strip=True)
+        #             # Some cells use checkmarks instead of text
+        #             if len(content) == 0 and cell.find("svg"):
+        #                 content = "X"
+        #
+        #             table_html += content
+        #             table_html += f"</{cell.name}>"
+        #         table_html += "</tr"
+        #     table_html += "</table>"
+        #
+        #     section_text = table_html
 
         page_text = "\n".join([page_text, section_text])
 
@@ -308,11 +310,11 @@ def create_sections_for_file(filename, page_map, description):
 def create_id_from_url(url):
     return re.sub(".pdf", "", os.path.basename(url))
 
-def create_sections_for_webpage(url, page_map):
+def create_sections_for_webpage(url, page_map, description):
     for i, (section, pagenum) in enumerate(split_text(page_map)):
         yield {
             "id": f"{create_id_from_url(url)}-{i}",
-            "content": section,
+            "content": f"This paragraph is about {description}. {section}",
             "category": args.category,
             "sourcepage": blob_name_from_file_page(url, pagenum),
             "sourcefile": url,
@@ -387,7 +389,7 @@ else:
     if not args.remove:
         create_search_index()
     
-
+    # print(f"Processing files...")
     # for filename in glob.glob(args.files):
     #     if args.verbose: print(f"Processing '{filename}'")
     #     if args.remove:
@@ -403,32 +405,34 @@ else:
     #         sections = create_sections_for_file(os.path.basename(filename), page_map)
     #         index_sections(os.path.basename(filename), sections)
 
-    print(f"Processing files...")
-    for source in file_sources:
-        filename = source[0]
-        description = source[1]
-        if args.verbose: print(f"Processing '{filename}'")
-        if args.remove:
-            remove_blobs(filename)
-            remove_from_index(filename)
-        elif args.removeall:
-            remove_blobs(None)
-            remove_from_index(None)
-        else:
-            if not args.skipblobs:
-                upload_blobs(filename)
-            page_map = get_document_text_from_file(filename)
-            sections = create_sections_for_file(os.path.basename(filename), page_map, description)
-            index_sections(os.path.basename(filename), sections)
-
-    # print("Processing urls...")
-    # for url in urls:
-    #     if args.verbose: print(f"Processing '{url}'")
-    #
-    #     if ".pdf" in url:
-    #         page_map = get_document_text_from_url(url)
+    # print(f"Processing files...")
+    # for source in file_sources:
+    #     filename = source[0]
+    #     description = source[1]
+    #     if args.verbose: print(f"Processing '{filename}'")
+    #     if args.remove:
+    #         remove_blobs(filename)
+    #         remove_from_index(filename)
+    #     elif args.removeall:
+    #         remove_blobs(None)
+    #         remove_from_index(None)
     #     else:
-    #         page_map = get_html_page_text(url)
-    #
-    #     sections = create_sections_for_webpage(url, page_map)
-    #     index_sections(os.path.basename(url), sections)
+    #         if not args.skipblobs:
+    #             upload_blobs(filename)
+    #         page_map = get_document_text_from_file(filename)
+    #         sections = create_sections_for_file(os.path.basename(filename), page_map, description)
+    #         index_sections(os.path.basename(filename), sections)
+
+    print("Processing urls...")
+    for source in url_sources:
+        url = source[0]
+        description = source[1]
+        if args.verbose: print(f"Processing '{url}'")
+
+        if ".pdf" in url:
+            page_map = get_document_text_from_url(url)
+        else:
+            page_map = get_html_page_text(url)
+
+        sections = create_sections_for_webpage(url, page_map, description)
+        index_sections(os.path.basename(url), sections)

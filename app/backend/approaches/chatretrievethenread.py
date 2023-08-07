@@ -8,6 +8,7 @@ from azure.search.documents import SearchClient
 from azure.search.documents.models import QueryType
 from approaches.approach import Approach
 from text import nonewlines
+import tiktoken
 
 class ChatRetrieveThenReadApproach(Approach):
     """
@@ -20,20 +21,20 @@ class ChatRetrieveThenReadApproach(Approach):
     USER = "user"
     ASSISTANT = "assistant"
 
-    DOCUMENT_SCORE_CUTOFF = 1
+    DOCUMENT_SCORE_CUTOFF = 0.0
+    MAXIMUM_SOURCE_TOKENS = 5000
 
     CHATGPT_TIMEOUT = 600
     CHATGPT_RETRY_WAIT = 1
     CHATGPT_MAX_RETRIES = 3
-
+    CHATGPT_MAX_TOKENS = 8192
+    CHATGPT_MAXIMUM_ANSWER_LENGTH = 1024
 
     assistant_prompt = """
 Your name is Floyd and you are a helpful insurance customer assistant representing DNB bank ASA. You respond with the same language as the question wes asked. Be brief in your answers. If the user asks something unrelated to DNB insurance, say that you can't answer that.
 Answer ONLY with the facts listed in the list of sources below ```Sources```. If there isn't enough information below or the answer is not related to the sources, say you don't know. If asking a clarifying question to the user would help, ask the question.
-For tabular information return it as an html table. Do not return markdown format.
-Each source has a name followed by colon and the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
-When asked a question and there are no sources available, tell the customer that you unfortunately cant answer that, as its not in your sources but that the customer may find information here: https://www.dnb.no/en/insurance. 
-
+Each source has a name formatted as ###name### followed by the actual information, always include the source name for each fact you use in the response. Use square brackets to reference the source, e.g. [info1.txt]. Don't combine sources, list each source separately, e.g. [info1.txt][info2.pdf].
+When asked a question and there are no sources available, tell the customer that you unfortunately cant answer that, as its not in your sources, but that the customer may find information here: https://www.dnb.no/en/insurance.
 When asked a question you have been asked earlier in the chat, tell the customer the same thing as earlier, or tell them to be more specific please
 Examples:
 User: Does DNB offer house insurance?
@@ -41,9 +42,9 @@ Assistent: DNB does offer house insurance [Source 1]
 User: What is the price of the house insurance?
 Assistent: That depends on several factors, allow us to calculate how much insurance is going to cost you by going to our website. [Source 1]
 User: What is the difference between a cat and a dog?
-Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance. Check out https://www.dnb.no/en/insurance for more information
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given. Check out https://www.dnb.no/en/insurance for more information.
 User: What is Kasko?
-Assistent: Unfortunately I cant answer that, as its not in the sources I have been given, please ask something related to house or content insurance. Check out https://www.dnb.no/en/insurance for more information
+Assistent: Unfortunately I cant answer that, as its not in the sources I have been given. Check out https://www.dnb.no/en/insurance for more information.
 {follow_up_questions_prompt}
 {injected_prompt}
 ```Sources```
@@ -58,20 +59,18 @@ Assistent: Unfortunately I cant answer that, as its not in the sources I have be
     Assistant: Извините, я не могу ответить на вопрос, потому что не могу найти соответствующие источники.
     """
     
-
     query_prompt = """Below is a history of the conversation so far, and a new question asked by the user that needs to be answered by searching in a knowledge base about DNB insurance.
 Generate a search query based on the conversation and the new question. 
 Do not include cited source filenames and document names e.g info.txt or doc.pdf in the search query terms.
 Do not include any text inside [] or <<>> in the search query terms.
 Do not include any special characters like '+'.
 It is important that the search query is in english such that cognitive search can search efficient you can use the example below:
-"Query: Hva er husforsikring?
+Query: Hva er husforsikring?
 Search query: What is house insurance?
-Query: ¿Cuánto cuesta el seguro de automóvil? "
+Query: ¿Cuánto cuesta el seguro de automóvil?
 Search query: What does car insurance cost?
 Query: Was ist der Unterschied zwischen Hausratversicherung und Hausratversicherung?
 Search query: What is the difference between contents insurance and home insurance
-
 
 History:
 {history}
@@ -92,7 +91,6 @@ History:
     Use double angle brackets to reference the questions.
     Format:
     <<What is the cheapest alternative?>> <<What does it cover?>> <<How much does it cost?>>"""
-
 
     def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
         self.search_client = search_client
@@ -123,7 +121,7 @@ History:
         if search_query == None:
             return {"data_points": "", "answer": "Could not generate query, please try again.", "thoughts": ""}
 
-        print(f" Original search query: {search_query}")
+        print(f"Search query: {search_query}")
       
         print("Beginning step 2: Retrieve documents from search index")
 
@@ -154,13 +152,14 @@ History:
             # answer = self.generate_question_answer(prompt,[], overrides, self.CHATGPT_TIMEOUT)
         
 
+        print(filtered_history)
 
         print(f"Finished step 3 in {time.time() - step_time} seconds")
         print(f"Answering process completed in {time.time() - start_time} seconds")
 
         thoughts = f"Searched for:<br>{search_query}<br><br>Prompt:<br>" + prompt.replace('\n', '<br>')
         if overrides.get("suggest_followup_questions"):
-            answer = self.remove_wrong_questions_format(answer,"Next Questions: ")
+            answer = self.remove_wrong_questions_format(answer, "Next Questions: ")
 
         
         return {"data_points": source_list, "answer": answer, "thoughts": thoughts}
@@ -184,11 +183,10 @@ History:
                                           query_language="en-us", 
                                           query_speller="lexicon", 
                                           semantic_configuration_name="default", 
-                                          top=top,
                                           query_caption="extractive|highlight-false" if use_semantic_captions else None)
         
         else:
-            r = self.search_client.search(query, filter=filter, top=top)
+            r = self.search_client.search(query, filter=filter)
 
         documents = []
         for doc in r:
@@ -198,15 +196,26 @@ History:
             else:
                 print(f"Kept doc {doc[self.sourcepage_field]} with score {score}")
                 documents.append(doc)
-        
+
+        documents.sort(reverse=True, key=lambda doc: doc["@search.score"])
         return documents
 
     def documents_to_sources(self, documents, use_semantic_captions):
-        if use_semantic_captions:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(" . ".join([c.text for c in doc['@search.captions']])) for doc in documents]
-        else:
-            results = [doc[self.sourcepage_field] + ": " + nonewlines(doc[self.content_field]) for doc in documents]
+        token_count = 0
+        results = []
+        for doc in documents:
+            if use_semantic_captions:
+                source = f"###{doc[self.sourcepage_field]}### {nonewlines(' . '.join([c.text for c in doc['@search.captions']]))}"
+            else:
+                source = f"###{doc[self.sourcepage_field]}### {nonewlines(doc[self.content_field])}"
 
+            token_count += self.token_count(source)
+            if token_count > self.MAXIMUM_SOURCE_TOKENS:
+                print("Reached maximum token count for sources")
+                break
+
+            results.append(source)
+            
         return results
 
     def check_answer_sources(self, answer, documents, history):
@@ -265,7 +274,7 @@ History:
                 engine=self.chatgpt_deployment,
                 messages=messages,
                 temperature=overrides.get("temperature") or 0,
-                max_tokens=1024,
+                max_tokens=self.CHATGPT_MAXIMUM_ANSWER_LENGTH,
                 n=1,
                 )
 
@@ -318,3 +327,14 @@ History:
         if  (new_answer != answer):
             print(f"Removed {substring} from answer")
         return new_answer
+
+
+    def message_token_count(self, message):
+        num_tokens = 2  # For "role" and "content" keys
+        for _, value in message.items():
+            num_tokens += self.token_count(value)
+        return num_tokens
+
+    def token_count(self, text):
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        return len(encoding.encode(text))
