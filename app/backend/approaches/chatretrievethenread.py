@@ -205,9 +205,9 @@ History:
         results = []
         for doc in documents:
             if use_semantic_captions:
-                source = f"###{doc[self.sourcepage_field]}### {nonewlines(' . '.join([c.text for c in doc['@search.captions']]))}"
+                source = f"###{doc['sourcefile']}### {nonewlines(' . '.join([c.text for c in doc['@search.captions']]))}"
             else:
-                source = f"###{doc[self.sourcepage_field]}### {nonewlines(doc[self.content_field])}"
+                source = f"###{doc['sourcefile']}### {nonewlines(doc[self.content_field])}"
 
             token_count += self.token_count(source)
             if token_count > self.MAXIMUM_SOURCE_TOKENS:
@@ -221,7 +221,7 @@ History:
     def check_answer_sources(self, answer, documents, history):
         source_regex = r"\[([^]]+)\]"
         answer_sources = re.findall(source_regex, answer)
-        search_documents = [doc[self.sourcepage_field] for doc in documents]
+        search_documents = [doc["sourcefile"] for doc in documents]
         history_documents = [src for msg in history if self.ASSISTANT in msg for src in re.findall(source_regex, msg[self.ASSISTANT])]
 
         print("Answer sources: ", answer_sources)

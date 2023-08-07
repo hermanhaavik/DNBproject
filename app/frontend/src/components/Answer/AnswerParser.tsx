@@ -50,3 +50,15 @@ export function parseAnswerToHtml(answer: string, onCitationClicked: (citationFi
         followupQuestions
     };
 }
+
+export function getSupportingContent(dataPoints: string[], citations: string[]): string[] {
+    const supportingContent: string[] = [];
+    dataPoints.forEach((point) => {
+        const match = point.match(/###(.*?)###/);
+        if (match && !citations.includes(match[1]) && !supportingContent.includes(match[1])) {
+            supportingContent.push(match[1]);
+        }
+    });
+
+    return supportingContent;
+}

@@ -5,7 +5,7 @@ import DOMPurify from "dompurify";
 import styles from "./Answer.module.css";
 
 import { AskResponse, getCitationFilePath } from "../../api";
-import { parseAnswerToHtml } from "./AnswerParser";
+import { parseAnswerToHtml, getSupportingContent } from "./AnswerParser";
 import { AnswerIcon } from "./AnswerIcon";
 import { SupportingContent } from "../SupportingContent";
 
@@ -32,7 +32,8 @@ export const Answer = ({
 
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
 
-    const supporting_titles = answer.data_points.map(x => x.split(":")[0]).filter(x => !parsedAnswer.citations.includes(x));
+    const supportingContent = getSupportingContent(answer.data_points, parsedAnswer.citations);
+    console.log(supportingContent);
 
     return (
         <Stack className={`${styles.answerContainer} ${isSelected && styles.selected}`} verticalAlign="space-between">
@@ -69,14 +70,14 @@ export const Answer = ({
                     <Stack horizontal wrap tokens={{ childrenGap: 5 }}>
                         <span className={styles.citationLearnMore}>Citations:</span>
                         {parsedAnswer.citations.map((x, i) => {
-                            const path = getCitationFilePath(x);
+                            // const path = getCitationFilePath(x);
                             return (
-                                <a key={i} className={styles.citation} title={x} onClick={() => onCitationClicked(path)}>
-                                    {`${++i}. ${x}`}
-                                </a>
-                                // <a key={i} className={styles.citation} title={x} href={`https://${x}`} target="_blank" rel="noopener noreferrer">
+                                // <a key={i} className={styles.citation} title={x} onClick={() => onCitationClicked(path)}>
                                 //     {`${++i}. ${x}`}
                                 // </a>
+                                <a key={i} className={styles.citation} title={x} href={`https://${x}`} target="_blank" rel="noopener noreferrer">
+                                    {`${++i}. ${x}`}
+                                </a>
                             );
                         })}
                     </Stack>
@@ -84,19 +85,19 @@ export const Answer = ({
             )}
 
             <div style={{marginTop: "10px"}}>
-            {!!supporting_titles.length && (
+            {!!supportingContent.length && (
                     <Stack.Item>
                         <Stack horizontal wrap tokens={{ childrenGap: 5 }}>
                             <span className={styles.citationLearnMore}>Supporting content:</span>
                             {
-                            supporting_titles.map((x, i) => {
+                            supportingContent.map((x, i) => {
                                 return (
-                                    <a key={i} className={styles.citation} title={x} onClick={() => onSupportingContentClicked()}>
-                                        {`${++i}. ${x}`}
-                                    </a>
-                                    // <a key={i} className={styles.citation} title={x} href={`https://${x}`} target="_blank" rel="noopener noreferrer">
+                                    // <a key={i} className={styles.citation} title={x} onClick={() => onSupportingContentClicked()}>
                                     //     {`${++i}. ${x}`}
                                     // </a>
+                                    <a key={i} className={styles.citation} title={x} href={`https://${x}`} target="_blank" rel="noopener noreferrer">
+                                        {`${++i}. ${x}`}
+                                    </a>
                                 );
                             })}
                         </Stack>

@@ -316,7 +316,7 @@ def create_sections_for_webpage(url, page_map, description):
             "id": f"{create_id_from_url(url)}-{i}",
             "content": f"This paragraph is about {description}. {section}",
             "category": args.category,
-            "sourcepage": blob_name_from_file_page(url, pagenum),
+            "sourcepage": blob_name_from_file_page(url, i),
             "sourcefile": url,
         }
 
