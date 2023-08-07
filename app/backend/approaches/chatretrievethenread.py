@@ -48,6 +48,15 @@ Assistent: Unfortunately I cant answer that, as its not in the sources I have be
 ```Sources```
 {sources}
 """
+    no_source = """ 
+    You are helpful insurance customer assistant representing DNB bank ASA. Please refere to DNB as your insurance company. You respond with the same language as the question asked.
+    Please answer the client in the examples below: 
+    Examples: 
+    Assistant: Sorry, I cant answer the question becuase I cant find any relevant sources.
+    Assistant: Beklager, jeg kan ikke svare på spørsmålet fordi jeg skrånende finner noen relevante kilder.
+    Assistant: Извините, я не могу ответить на вопрос, потому что не могу найти соответствующие источники.
+    """
+    
 
     query_prompt = """Below is a history of the conversation so far, and a new question asked by the user that needs to be answered by searching in a knowledge base about DNB insurance.
 Generate a search query based on the conversation and the new question. 
@@ -130,7 +139,7 @@ History:
         answer = self.generate_question_answer(prompt, filtered_history, overrides, self.CHATGPT_TIMEOUT)
         if answer == None:
             print("WARNING: Timeout before generating question answer")
-            answer = "Could not answer question, please try again."
+            answer = self.generate_question_answer(self.no_source, filtered_history, overrides, self.CHATGPT_TIMEOUT)
          
             
 
@@ -138,7 +147,8 @@ History:
 
         if not self.check_answer_sources(answer, documents, filtered_history):
             print("WARNING: Generated question answer used sources incorrectly")
-            answer = "Sorry, I do not have information related to your question."
+            # answer = "Sorry, I do not have information related to your question."
+            answer = self.generate_question_answer(self.no_source, filtered_history, overrides, self.CHATGPT_TIMEOUT)
 
 
         print(f"Finished step 3 in {time.time() - step_time} seconds")
