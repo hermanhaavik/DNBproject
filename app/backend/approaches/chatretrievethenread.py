@@ -62,7 +62,6 @@ Search query: What does car insurance cost?
 Query: Was ist der Unterschied zwischen Hausratversicherung und Hausratversicherung?
 Search query: What is the difference between contents insurance and home insurance
 
- 
 
 History:
 {history}
@@ -77,12 +76,12 @@ History:
     ]
 
     follow_up_questions_prompt_content = """After giving your answer, generate three very brief follow-up questions that the user would likely ask next.
-    Base your questions on the sources used in the previous answer or the earlier messages in the history.
-    Use double angle brackets to reference the questions, e.g. <<What is the cheapest alternative?>> <<How can i switch insurance?>> <<What is included in comprehensive insurance?>>
+    Base your questions on the sources used in the previous answer if there are any sources there.
     Try not to repeat questions that have already been asked.
-    The questions should not be repeated
     Only generate questions and do not generate any text before or after the questions, such as 'Next Questions'
-    I repeat, the questions should be presented as plain text with brackets, no other text before or after them"""
+    Use double angle brackets to reference the questions.
+    Format:
+    <<What is the cheapest alternative?>> <<What does it cover?>> <<How much does it cost?>>"""
 
 
     def __init__(self, search_client: SearchClient, chatgpt_deployment: str, sourcepage_field: str, content_field: str):
@@ -132,6 +131,7 @@ History:
         if answer == None:
             print("WARNING: Timeout before generating question answer")
             answer = "Could not answer question, please try again."
+         
             
 
         print("Generated answer: ", answer)
