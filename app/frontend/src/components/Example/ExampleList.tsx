@@ -16,7 +16,9 @@ const EXAMPLES: ExampleModel[] = [
         text: "What is the difference between comprehensive and fully comprehensive car insurance?",
         value: "What is the difference between comprehensive and fully comprehensive car insurance?"
     },
-    { text: "What is the max value of content in contentinsurance?", value: "What is the max value of content in contentinsurance?" }
+    {   text: "How can I lower the price of my contents insurance?", 
+        value: "How can I lower the price of my contents insurance?" 
+    }
 ];
 
 interface Props {

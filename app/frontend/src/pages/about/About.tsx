@@ -7,13 +7,13 @@ interface Tab {
   title: string;
   content: string;
 }
-const concept = "Floyd is supposed to be a proof-of-concept showcasing the possibilites about how entreprise data and gpt models can be combines, in order to create a more intutitve way for customers to get answers to their questions. This is displayed by Microsoft in their demo which we have used and tinkered with in order to give you: 'Floyd'"
+const concept = "Floyd is a proof-of-concept showcasing the possibilites about how entreprise data and gpt models can be combines, in order to create a more intutitve way for customers to get answers to their questions. This is displayed by Microsoft in their demo which we have used and tinkered with in order to give you: 'Floyd'"
 
 const floydInfo = `Floyd: Transforming Customer Conversations with DNB Insurance Data \n
 
 Floyd is an innovative chat bot solution that leverages DNB-specific insurance information to revolutionize customer interactions. By harnessing the power of artificial intelligence and DNB's extensive insurance data, Floyd offers a seamless and accessible conversational experience for customers.
 
-Using the advanced capabilities of ChatGPT and Azure Cognitive Search, Floyd understands customer inquiries and retrieves accurate, real-time insurance information from DNB's data sources. By integrating DNB-specific insurance data, Floyd provides personalized responses, helping customers make informed decisions and navigate insurance-related queries effortlessly.
+Using the advanced capabilities of ChatGPT and Azure Cognitive Search, Floyd understands customer inquiries and retrieves accurate, up to date information from DNB's data sources. By integrating DNB-specific insurance data, Floyd provides personalized responses, helping customers make informed decisions and navigate insurance-related queries effortlessly.
 
 Floyd's unique approach streamlines customer experiences by automating information retrieval and simplifying insurance processes. With easy access to DNB's insurance knowledge base, customers can obtain timely information, explore insurance policies, and receive tailored recommendations. Floyd empowers customers to make confident choices and enhances their overall insurance journey.
 
