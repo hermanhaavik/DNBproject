@@ -21,11 +21,11 @@ const Layout = () => {
                                     Chat
                                 </NavLink>
                             </li>
-                            <li className={styles.headerNavLeftMargin}>
+                            {/* <li className={styles.headerNavLeftMargin}>
                                 <NavLink to="/qa" className={({ isActive }) => (isActive ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}>
                                     Ask a question
                                 </NavLink>
-                            </li>
+                            </li> */}
                             <li className={styles.headerNavLeftMargin}>
                                 <a href="https://gitlab.tech.dnb.no/dnb/platypus/tmt" target={"_blank"} title="GitLab repository link">
                                     <img
@@ -42,7 +42,7 @@ const Layout = () => {
                     </nav>
                     <h4 className={styles.headerRightText}>
                         <NavLink to="/about" className={({ isActive }) => (isActive ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}>
-                            Floyd the chatbot
+                            About
                         </NavLink>
                     </h4>
                     <div className={styles.headerRightLogo}>
