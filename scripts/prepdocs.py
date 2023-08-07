@@ -351,6 +351,7 @@ def index_sections(filename, sections):
     search_client = SearchClient(endpoint=f"https://{args.searchservice}.search.windows.net/",
                                     index_name=args.index,
                                     credential=search_creds)
+
     i = 0
     batch = []
     for s in sections:
