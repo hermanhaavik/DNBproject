@@ -7,6 +7,7 @@ import styles from "./Answer.module.css";
 import { AskResponse, getCitationFilePath } from "../../api";
 import { parseAnswerToHtml } from "./AnswerParser";
 import { AnswerIcon } from "./AnswerIcon";
+import { SupportingContent } from "../SupportingContent";
 
 interface Props {
     answer: AskResponse;
@@ -30,6 +31,8 @@ export const Answer = ({
     const parsedAnswer = useMemo(() => parseAnswerToHtml(answer.answer, onCitationClicked), [answer]);
 
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
+
+    const supporting_titles = answer.data_points.map(x => x.split(":")[0]).filter(x => !parsedAnswer.citations.includes(x));
 
     return (
         <Stack className={`${styles.answerContainer} ${isSelected && styles.selected}`} verticalAlign="space-between">
@@ -80,6 +83,26 @@ export const Answer = ({
                 </Stack.Item>
             )}
 
+            <div style={{marginTop: "10px"}}>
+            {!!supporting_titles.length && (
+                    <Stack.Item>
+                        <Stack horizontal wrap tokens={{ childrenGap: 5 }}>
+                            <span className={styles.citationLearnMore}>Supporting content:</span>
+                            {
+                            supporting_titles.map((x, i) => {
+                                return (
+                                    <a key={i} className={styles.citation} title={x} onClick={() => onSupportingContentClicked()}>
+                                        {`${++i}. ${x}`}
+                                    </a>
+                                    // <a key={i} className={styles.citation} title={x} href={`https://${x}`} target="_blank" rel="noopener noreferrer">
+                                    //     {`${++i}. ${x}`}
+                                    // </a>
+                                );
+                            })}
+                        </Stack>
+                    </Stack.Item>
+            )}
+
             {!!parsedAnswer.followupQuestions.length && showFollowupQuestions && onFollowupQuestionClicked && (
                 <Stack.Item>
                     <Stack horizontal wrap className={`${!!parsedAnswer.citations.length ? styles.followupQuestionsList : ""}`} tokens={{ childrenGap: 6 }}>
@@ -94,6 +117,7 @@ export const Answer = ({
                     </Stack>
                 </Stack.Item>
             )}
+            </div>
         </Stack>
     );
 };
