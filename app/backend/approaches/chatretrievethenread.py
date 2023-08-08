@@ -51,8 +51,8 @@ Assistent: Unfortunately I cant answer that, as its not in the sources I have be
 """
     no_source = """ 
     You are helpful insurance customer assistant representing DNB bank ASA. Please refere to DNB as your insurance company. You respond with the same language as the question asked.
-    Please answer the client in the examples below: 
-    Examples: 
+    You must say that you cant answer this question in the same language as the question: {question}.
+    Please answer the client in the same way as below: 
     Assistant: Sorry, I cant answer the question becuase I cant find any relevant sources.
     Assistant: Beklager, jeg kan ikke svare på spørsmålet fordi jeg skrånende finner noen relevante kilder.
     Assistant: Извините, я не могу ответить на вопрос, потому что не могу найти соответствующие источники.
@@ -140,7 +140,8 @@ History:
         answer = self.generate_question_answer(prompt, filtered_history, overrides, self.CHATGPT_TIMEOUT)
         if answer == None:
             print("WARNING: Timeout before generating question answer")
-            answer = self.generate_question_answer(self.no_source, filtered_history, overrides, self.CHATGPT_TIMEOUT)
+            answer = "Sorry, I can't answer the question."
+            # answer = self.generate_question_answer(self.no_source, filtered_history[len(filtered_history)], overrides, self.CHATGPT_TIMEOUT)
          
             
 
@@ -148,8 +149,10 @@ History:
 
         if not self.check_answer_sources(answer, documents, filtered_history):
             print("WARNING: Generated question answer used sources incorrectly")
-            # answer = "Sorry, I do not have information related to your question."
-            answer = self.generate_question_answer(self.no_source, filtered_history, overrides, self.CHATGPT_TIMEOUT)
+            answer = "Sorry, I do not have information related to your question."
+            # prompt = self.no_source.format(question=filtered_history[-1])
+            # answer = self.generate_question_answer(prompt,[], overrides, self.CHATGPT_TIMEOUT)
+        
 
 
         print(f"Finished step 3 in {time.time() - step_time} seconds")
