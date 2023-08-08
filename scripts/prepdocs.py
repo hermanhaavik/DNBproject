@@ -160,7 +160,8 @@ def get_html_page_text(url):
     html_page = urlopen(req).read()
     soup = BeautifulSoup(html_page, "html.parser")
 
-    page_text = ""
+    page_num = 0
+    offset = 0
 
     for section in soup.select("div[data-section-index]"):
         section_type = section["data-section-type"]
@@ -201,11 +202,9 @@ def get_html_page_text(url):
         #
         #     section_text = table_html
 
-        page_text = "\n".join([page_text, section_text])
-
-    page_num = 0
-    offset = 0
-    page_map = [(page_num, offset, page_text)]
+        page_map.append((page_num, offset, section_text))
+        page_num += 1
+        offset += len(section_text)
 
     return page_map
 
@@ -311,12 +310,12 @@ def create_id_from_url(url):
     return re.sub(".pdf", "", os.path.basename(url))
 
 def create_sections_for_webpage(url, page_map, description):
-    for i, (section, pagenum) in enumerate(split_text(page_map)):
+    for (page_num, offset, page_text) in page_map:
         yield {
-            "id": f"{create_id_from_url(url)}-{i}",
-            "content": f"This paragraph is about {description}. {section}",
+            "id": f"{create_id_from_url(url)}-{page_num}",
+            "content": f"This paragraph is about {description}. {page_text}",
             "category": args.category,
-            "sourcepage": blob_name_from_file_page(url, i),
+            "sourcepage": blob_name_from_file_page(url, page_num),
             "sourcefile": url,
         }
 
